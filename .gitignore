@@ -6,6 +6,7 @@
 .jar
 .idea
 **~
+.ipynb_checkpoints/
 
 out
 tmp
