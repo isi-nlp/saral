@@ -1,0 +1,13 @@
+.pyc
+.class
+.o
+.tar
+.gz
+.jar
+.idea
+**~
+
+out
+tmp
+temp
+target
