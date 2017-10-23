@@ -1,12 +1,13 @@
 #!/usr/bin/env python
-"""
-Dataset Splitter
-Splits one big corpus file into training, development and test sets. It makes random assignments subject to word count
-constraints set by user
 
+"""
+Corpus Splitter
+Splits one big corpus file into training, development and test sets. It makes random assignments subject to word count constraints set by user.
+
+---
 
 # Author : Thamme Gowda
-# Created : October 20, 2018
+# Created : October 20, 2017
 """
 
 import argparse
@@ -86,7 +87,7 @@ def assign_splits(path, dev_count, test_count, delim='\t'):
     random_select(dev_count, 1)
     random_select(test_count, 2)
 
-    # lets print stats
+    # assignment stats
     counts = defaultdict(int)
     doc_assignments = {}
     label_stats = defaultdict(set)
@@ -134,8 +135,11 @@ def write_label_assignment(assignment, path, count_stats):
             out.write("\t %s \n" % ','.join(items))
 
 
+
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(description="Corpus Splitter - makes test and dev"
+             "splits, by isolating all segments of each document into a split, "
+                                     "and also satisfies word count constraints set in commandline args.")
     parser.add_argument("-i", '--in', help="material data file", required=True)
     parser.add_argument("-o", '--out', help="Output prefix", required=True)
     parser.add_argument("-dev", '--dev', help="Development size in number of tokens", type=int, required=True)
@@ -145,7 +149,3 @@ if __name__ == '__main__':
     doc_assignments, count_stats, label_assignments = assign_splits(args['in'], args['dev'], args['test'])
     split_records(args['in'], args['out'], doc_assignments)
     write_label_assignment(label_assignments, args['out'] + '-assignments.meta', count_stats)
-
-
-
-
