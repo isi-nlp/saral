@@ -12,3 +12,6 @@ out
 tmp
 temp
 target
+__pycache__/
+out.*
+
