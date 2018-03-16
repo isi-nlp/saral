@@ -1,5 +1,9 @@
 # Do Not Translate  (DNT)
 
+## Requires
+ - python (>= 3)
+
+
 ## Gold Annotations 
 
 ### Scripts
@@ -36,7 +40,7 @@ IIRC 4 or 5 worked best for in LORELEI. This was specficially tuned for il6 = or
 
 ```bash
 for i in 3 4 5; do
-   src/copyme.py -D data/vocab -N data/il6.common.vocab -v $i \
+   src/copyme.py -D data/vocab.gz -N data/il6.common.vocab -v $i \
       -i set1.source.tok.tc.head -o set1.source.tok.tc.copyme.v$i ;
 done
 ```
