@@ -1,3 +1,6 @@
 [submodule "saral-mt/joshua"]
 	path = saral-mt/joshua
 	url = https://github.com/apache/incubator-joshua.git
+[submodule "saral-clir"]
+	path = saral-clir
+	url = git@github.com:isi-saral/saral-clir.git
