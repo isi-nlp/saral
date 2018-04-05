@@ -1,13 +1,16 @@
 # SARAL
 
+This is a parent repository of SARAL Project.
+This repository offers links to sub project repositories.
 
-## saral-mt
+
+## [saral-mt](saral-mt)
 
 Machine Translation Stuff
 
-## saral-ir
+## saral-clir
 
-Information Retrieval Stuff
+Cross Language Information Retrieval Stuff
 
 
 ## tools
