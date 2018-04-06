@@ -10,16 +10,14 @@
 import sys
 import unicodedata as ud
 
+PHRASE_DELIM = "|+|"
 
-def is_punct(tok):
+
+def is_not_punct(tok):
     for ch in tok:
-        if ud.category(ch).startswith('P'):
+        if not ud.category(ch).startswith('P'):
             return True
     return False
-
-
-def is_not_punct(x):
-    return not is_punct(x)
 
 
 def make_grams(seq, max_gram=None):
@@ -40,11 +38,31 @@ def make_grams(seq, max_gram=None):
     return grams
 
 
-def cut_dnt_toks(src_sent, tgt_sent, template="DNT_%d", phrase_join='|+|'):
+def dnt_tag_toks(src_sent, tgt_sent):
+    """
+    tags DNT tokens
+    :param src_sent:
+    :param tgt_sent:
+    :return:
+    """
+    """
+    1. set of common tokens between source and target, ignore the case
+    2. Mark each source and target token as DNT (True if they are in the set in Step 1)
+    """
+    # Step 1
+    common_toks = set(filter(is_not_punct, tgt_sent.lower().split())) & \
+                  set(filter(is_not_punct, src_sent.lower().split()))
+    # Step 2
+    src = [(tok, tok.lower() in common_toks) for tok in src_sent.split()]
+    tgt = [(tok, tok.lower() in common_toks) for tok in tgt_sent.split()]
+    return src, tgt
+
+
+def cut_dnt_toks(src, tgt, template="DNT_%d", phrase_join=PHRASE_DELIM):
     """
     replaces DNT Tokens with templates
-    :param src_sent: Source sentence
-    :param tgt_sent: target Sentence
+    :param src: Source sequence, each term should be tagged either as True (for DNT) or False (for Translate)
+    :param tgt: target sequence, each term should be tagged either as True (for DNT) or False (for Translate)
     :param template: replacement template, DNT_%d
     :param phrase_join: delimter used to join tokens within a phrase
     :return: (src_seq, tgt_seq, dnt_seq) after replacements
@@ -54,30 +72,22 @@ def cut_dnt_toks(src_sent, tgt_sent, template="DNT_%d", phrase_join='|+|'):
         Group adjacent DNT tokens into one big DNT phrase, and use only one DNT template token for that phrase.
 
     ALGORITHM:
-        Greedily group adjacent sequence of DNTs 
-        1. set of common tokens between source and target, ignore the case
-        2. Mark each source and target token as DNT (True if they are in the set in Step 1) 
-        3. Segment each sequence into groups of DNT tokens,
+        Greedily groups adjacent sequence of DNTs 
+
+        1. Segment each sequence into groups of DNT tokens,
             and create n-grams of each segments, upto their maximum length. Create an indexed set for fast lookup
-        4. Lets do the target side first. 
+        2. Lets do the target side first. 
             a. segment the tokens by grouping adjacent DNTs together. Begin with the max length segment. 
-            b. If this segment exists in the set created in Step 3, cool!
+            b. If this segment exists in the set created in Step 1, cool!
              Mark it as one big DNT phrase, assign a number to it. that number will help create a template DNT_%d
              advance to the next segment (i.e. skip number of words = len of segment) 
-            c. If max length segment doesnt exist in set, then ignore the last token. repeat 4.b and 4.c.
+            c. If max length segment doesnt exist in set, then ignore the last token. repeat 2.b and 2.c.
                 the worst case will be unigram token and  
-        5. On the source side,
-            do the similar process as step 4. 
+        3. On the source side,
+            do a similar process as step 2. 
             i.e. begin with max segment and  keep shrinking from right; 
-            stop when an n-gram, with DNT_%d was already assigned in step 4.b
+            stop when an n-gram, with DNT_%d was already assigned in step 2.b
     """
-    # Step 1
-    common_toks = set(filter(is_not_punct, tgt_sent.lower().split())) & \
-        set(filter(is_not_punct, src_sent.lower().split()))
-    # Step 2
-    src = [(tok, tok.lower() in common_toks) for tok in src_sent.split()]
-    tgt = [(tok, tok.lower() in common_toks) for tok in tgt_sent.split()]
-
     # Step 3
     src_dnt_grams = set()
     start = -1  # -1 not grouping, >=0 means grouping from that index
@@ -99,15 +109,13 @@ def cut_dnt_toks(src_sent, tgt_sent, template="DNT_%d", phrase_join='|+|'):
     original_case = {}
     tgt_res = []
     cur = 0
-
     while cur < len(tgt):
-        handled = False
         tok, dnt_flag = tgt[cur]
         if not dnt_flag:
             tgt_res.append(tok)
             cur += 1
-            handled = True
         else:
+            handled = False
             # look ahead => Greediness => go for max segment
             end = cur + 1
             while end < len(tgt) and tgt[end][1]:
@@ -125,19 +133,18 @@ def cut_dnt_toks(src_sent, tgt_sent, template="DNT_%d", phrase_join='|+|'):
                     handled = True
                     break
                 end -= 1    # leave the last one and try again
-        assert handled, 'Every token should be handled. what to do with %s ? ' % tok
+            assert handled, 'Every token should be handled. what to do with %s ? ' % tok
 
     # Step 5
     src_res = []
     cur = 0
     while cur < len(src):
-        handled = False
         tok, dnt_flag = src[cur]
         if not dnt_flag:
             src_res.append(tok)
             cur += 1
-            handled = True
         else:
+            handled = False
             # look ahead => Greediness => go for max segment
             end = cur + 1
             while end < len(src) and src[end][1]:
@@ -151,11 +158,14 @@ def cut_dnt_toks(src_sent, tgt_sent, template="DNT_%d", phrase_join='|+|'):
                     handled = True
                     break
                 end -= 1
-        assert handled, 'Each token should handled. what to do with %s ? ' % tok
+            if not handled:
+                # this token was not found in TGT side by itself, but it was a part of bigger phrase
+                cur += 1
+                src_res.append(tok)
 
     # DNT tokens -- restore the original case ( from the target side)
-    dnt_phrases = dict((original_case[lc_phrase], index) for lc_phrase, index in dnt_phrases.items())
-    phrases = [phrase for phrase, pos in sorted(dnt_phrases.items(), key=lambda x: x[0], reverse=True)]
+    dnt_phrases = [(original_case[lc_phrase], index) for lc_phrase, index in dnt_phrases.items()]
+    phrases = [phrase for phrase, pos in sorted(dnt_phrases, key=lambda x: x[1])]
     dnt_seq = [phrase_join.join(phrase) for phrase in phrases]
     return src_res, tgt_res, dnt_seq
 
@@ -170,13 +180,13 @@ def run(inp, outp, template="DNT_%d"):
     """
     for line in inp:
         src_sent, tgt_sent = line.split('\t')
-        src_seq, tgt_seq, dnt_seq = cut_dnt_toks(src_sent, tgt_sent, template)
+        src_seq, tgt_seq =  dnt_tag_toks(src_sent, tgt_sent)
+        src_seq, tgt_seq, dnt_seq = cut_dnt_toks(src_seq, tgt_seq, template)
         seq1, seq2, seq3 = ' '.join(src_seq), ' '.join(tgt_seq), ' '.join(dnt_seq)
         outp.write('%s\t%s\t%s\n' % (seq1, seq2, seq3))
 
 
 if __name__ == '__main__':
-
     if sys.version_info[0] < 3:
         raise Exception('Please run this on Python 3 or newer. (∵ I NEED UNICODE)')
     import argparse
@@ -197,3 +207,5 @@ if __name__ == '__main__':
 
     args = vars(parser.parse_args())
     run(args['in'], args['out'], template=args['template'])
+
+#print(dnt_tag_toks("Mr.Bond", "Mr.Bond"))

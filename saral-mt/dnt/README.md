@@ -17,15 +17,14 @@
 
 ```bash
 # If you have tags, how to replace 'em
-$ printf "I love Los Angeles\tT T N N" | python3 dnt_cut.py
- I love DNT_1 DNT_2	Los Angeles
+$ printf "I love Los Angeles said Mr.Bond \tT T N N T N" | python3 dnt_cut.py
+I love DNT_1 said DNT_2	Los|+|Angeles Mr.Bond
 
-# If you have Parallel data, how to replace DNT tokens
-$ printf "I love Los Angeles\tAmo Los Angeles" | python3 dnt_cut_train.py
- I love DNT_1 DNT_2	Amo DNT_1 DNT_2	Los Angeles
+# If you have Parallel data, how -+to replace DNT tokens
+$ printf "I love Los Angeles said Mr.Bond\tMe encanta Los Angeles dijo Mr.Bond" | python3 dnt_cut_train.py
 
 # How to restore the original tokens 
-printf "Amo DNT_1 DNT_2\tLos Angeles" | ./dnt_paste.py
+printf "I love DNT_1 said DNT_2\tLos|+|Angeles Mr.Bond" | ./dnt_paste.py
 
 ```
 

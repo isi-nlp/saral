@@ -4,14 +4,53 @@
 # Date = March 07, 2018
 
 import sys
+from collections import namedtuple
+
+PHRASE_DELIM = "|+|"
+Segment = namedtuple('Segment', ['toks', 'tag'])
 
 
-def cut_dnt_toks(inp, outp, max_toks=200, template="DNT_%d", dnt_tag='N'):
+def dnt_cut(text, tags, dnt_tag='N', template="DNT_%d"):
+    """
+     replaces DNT Tokens with templates
+    :param text: list of tokens from input text
+    :param tags: list of tags for each input token
+    :param template: template string for replacement. default is DNT_%d
+    :param dnt_tag: tag that means DNT. default is N
+    :return: (text seq after replacement, DNT sequence)
+    """
+    assert len(text) == len(tags), 'words and tags must match! words=%d, tags=%d' % (len(text), len(tags))
+    # Step : groups tokens into segments based on similar tag
+    segments = []
+    for tok, tag in zip(text, tags):
+        if segments and tag == segments[-1].tag:
+            # extend the last segment
+            segments[-1].toks.append(tok)
+        else: # initialize or create a new segment
+            segments.append(Segment([tok], tag))
+
+    # Step: DNTs are replaced with templates and non DNTs are copied
+    seq1, seq2 = [], []
+    phrase_mem = {}     # if same segment appear multiple times, remember them
+    for seg in segments:
+        if seg.tag == dnt_tag:
+            phrase = PHRASE_DELIM.join(seg.toks)
+            if phrase in phrase_mem:
+                out_word = phrase_mem[phrase_mem]
+            else:
+                out_word = template % (len(seq2) + 1)
+                seq2.append(phrase)
+            seq1.append(out_word)
+        else:
+            seq1.extend(seg.toks)
+    return ' '.join(seq1), ' '.join(seq2)
+
+
+def run(inp, outp, template="DNT_%d", dnt_tag='N'):
     """
     replaces DNT Tokens with templates
     :param inp: input file stream that reads line by line
     :param outp: output file stream
-    :param max_toks: upper bound on number of tokens to replace. default is 200
     :param template: template string for replacement. default is DNT_%d
     :param dnt_tag: tag that means DNT. default is N
     :return: None
@@ -19,15 +58,7 @@ def cut_dnt_toks(inp, outp, max_toks=200, template="DNT_%d", dnt_tag='N'):
     for line in inp:
         text, tags = line.split('\t')
         text, tags = text.split(), tags.split()
-        assert len(text) == len(tags), 'words and tags must match!'
-        seq1, seq2 = [], []
-        for word, tag in zip(text, tags):
-            out_word = word
-            if tag == dnt_tag and len(seq2) < max_toks:
-                out_word = template % (len(seq2) + 1)
-                seq2.append(word)
-            seq1.append(out_word)
-        seq1, seq2 = ' '.join(seq1), ' '.join(seq2)
+        seq1, seq2 = dnt_cut(text, tags, dnt_tag, template)
         outp.write('%s\t%s\n' % (seq1, seq2))
 
 
@@ -44,9 +75,8 @@ if __name__ == '__main__':
                              'SEQ2 will have words words that are cut from source, each position will correspond to'
                              ' the suffix of template token. Example: DNT_1 template token in SEQ1 correspond to the'
                              ' first token in SEQ2')
-    parser.add_argument('-m', '--max-toks', type=int, default=200, help='Max DNT tokens per record')
     parser.add_argument('-t', '--template', type=str, default='DNT_%d', help='Template for tokens to be inserted')
     parser.add_argument('-d', '--dnt-tag', type=str, default='N', help='Tag that means do not translate')
 
     args = vars(parser.parse_args())
-    cut_dnt_toks(args['in'], args['out'], max_toks=args['max_toks'], template=args['template'], dnt_tag=args['dnt_tag'])
+    run(args['in'], args['out'], template=args['template'], dnt_tag=args['dnt_tag'])
