@@ -180,7 +180,7 @@ def run(inp, outp, template="DNT_%d"):
     """
     for line in inp:
         src_sent, tgt_sent = line.split('\t')
-        src_seq, tgt_seq =  dnt_tag_toks(src_sent, tgt_sent)
+        src_seq, tgt_seq = dnt_tag_toks(src_sent, tgt_sent)
         src_seq, tgt_seq, dnt_seq = cut_dnt_toks(src_seq, tgt_seq, template)
         seq1, seq2, seq3 = ' '.join(src_seq), ' '.join(tgt_seq), ' '.join(dnt_seq)
         outp.write('%s\t%s\t%s\n' % (seq1, seq2, seq3))
@@ -208,4 +208,3 @@ if __name__ == '__main__':
     args = vars(parser.parse_args())
     run(args['in'], args['out'], template=args['template'])
 
-#print(dnt_tag_toks("Mr.Bond", "Mr.Bond"))
