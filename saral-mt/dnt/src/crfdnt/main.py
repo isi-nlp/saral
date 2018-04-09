@@ -16,21 +16,29 @@ from .tagger import Featurizer, CRFTagger, CRFTrainer
 log.basicConfig(level=log.INFO)
 
 
-def prepare(inp, out, **args):
+def prepare(inp, out, format, **args):
 
     def iob_tag():
+        if format == 'conll':
+            yield ()
         for rec in inp:
             src, tgt = rec.split('\t')
             if args.get('swap'):
                 tgt, src = src, tgt
             src, tgt = src.split(), tgt.split()
             tags = tag_src_iob(src, tgt)
-            yield ' '.join(src), ' '.join(tags)
-    recs = iob_tag()
-    if args.get('tags_only'):
-        recs = ([rec[1]] for rec in recs)
-    count = write_recs(recs, out)
-    log.info(f"Wrote {count} records")
+            if format == 'src-tags':
+                yield (' '.join(src), ' '.join(tags))
+            elif format == 'tags':
+                yield (' '.join(tags),)
+            elif format == 'conll':
+                yield from zip(src, tgt)
+                yield ('',)  # empty line at the end of sentence
+            else:
+                raise Exception(f'Unknown format requested: {format}')
+
+    count = write_recs(iob_tag(), out)
+    log.info(f"Wrote {count} records, format={format}")
 
 
 def train(inp, model, context, verbose, **kwargs):
@@ -94,11 +102,12 @@ def get_arg_parser():
 
     prep_arg_parser.add_argument('-o', '--out', default=sys.stdout, type=argparse.FileType('w'), help='''
             Output stream. Default is STDOUT. When specified, it should be a file path. 
-            Data Format=SRC_SEQUENCE\\tTAG_SEQUENCE per line. when (-to, --tags-only) is added to arguments, 
-            format will be just TAG_SEQUENCE per line.''')
-    prep_arg_parser.add_argument('-to', '--tags-only', default=False, action='store_true',
-                                 help='Write only the TAG_SEQUENCE to output')
+            Data Format depends on the (-f, --format) argument''')
     prep_arg_parser.add_argument('-s', '--swap', action='store_true', help='Swap the columns in input')
+    prep_arg_parser.add_argument('-f', '--format', choices=['src-tags', 'tags', 'conll'], default='src-tags', type=str,
+                                 help='''Format of output: `src-tag`: output SOURCE\\tTAG per line.
+                                   `tag`: output just TAG sequence per line.
+                                   `conll`: output in CoNLL 2013 NER format.''')
 
     # Train
     train_arg_parser.add_argument('model', type=str, help='''Path to store model file''')

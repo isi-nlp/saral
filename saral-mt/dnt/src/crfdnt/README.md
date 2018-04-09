@@ -24,22 +24,26 @@ export PYTHONPATH=...saral/saral-mt/dnt/src
 
 ```
 $ python -m crfdnt prepare -h
-usage: __main__.py prepare [-h] [-i INP] [-o OUT] [-to]
+usage: __main__.py prepare [-h] [-i INP] [-o OUT] [-s]
+                           [-f {src-tags,tags,conll}]
 
 optional arguments:
-  -h, --help         show this help message and exit
-  -i INP, --inp INP  Input stream. Default is STDIN. When specified, it should
-                     be a file path. Data Format=SRC_SEQUENCE\tTGT_SEQUENCE
-                     per line (default: <_io.TextIOWrapper name='<stdin>'
-                     mode='r' encoding='UTF-8'>)
-  -o OUT, --out OUT  Output stream. Default is STDOUT. When specified, it
-                     should be a file path. Data
-                     Format=SRC_SEQUENCE\tTAG_SEQUENCE per line. when (-to,
-                     --tags-only) is added to arguments, format will be just
-                     TAG_SEQUENCE per line. (default: <_io.TextIOWrapper
-                     name='<stdout>' mode='w' encoding='UTF-8'>)
-  -to, --tags-only   Write only the TAG_SEQUENCE to output (default: False)
-  -s, --swap         Swap the columns in input (default: False)
+  -h, --help            show this help message and exit
+  -i INP, --inp INP     Input stream. Default is STDIN. When specified, it
+                        should be a file path. Data
+                        Format=SRC_SEQUENCE\tTGT_SEQUENCE per line (default:
+                        <_io.TextIOWrapper name='<stdin>' mode='r'
+                        encoding='UTF-8'>)
+  -o OUT, --out OUT     Output stream. Default is STDOUT. When specified, it
+                        should be a file path. Data Format depends on the (-f,
+                        --format) argument (default: <_io.TextIOWrapper
+                        name='<stdout>' mode='w' encoding='UTF-8'>)
+  -s, --swap            Swap the columns in input (default: False)
+  -f {src-tags,tags,conll}, --format {src-tags,tags,conll}
+                        Format of output: `src-tag`: output SOURCE\tTAG per
+                        line. `tag`: output just TAG sequence per line.
+                        `conll`: output in CoNLL 2013 NER format. (default:
+                        src-tags)
 ```
 
 **Example**
