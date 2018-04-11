@@ -1,6 +1,7 @@
 # Author = Thamme Gowda
 # Created = April 07, 2018
 
+import sys
 import pycrfsuite as pycrf
 import logging as log
 from crfdnt.utils import evaluate_multi_class
@@ -69,6 +70,9 @@ class Featurizer(object):
                 tags = tags.split()
 
             words = words.split()
+            if not words:
+                print(f"Error: Skip:: {line}", file=sys.stderr)
+                continue
             seq = self.featurize_seq(words)
             if tags:
                 assert len(seq) == len(tags)
@@ -79,6 +83,11 @@ class Featurizer(object):
     def featurize_parallel_set(self, stream, swap=False, update_vocab_prob=0.7):
         for line in stream:
             line = line.strip()
+            if not line:
+                continue
+            if not '\t' in line:
+                print(f"Error! Cant split  :: {line}", file=sys.stderr)
+                continue
             src, tgt = line.split('\t')
             if swap:
                 src, tgt = tgt, src
@@ -104,9 +113,9 @@ class CRFTrainer(pycrf.Trainer):
     @staticmethod
     def get_trainer_params():
         return {
-            'c1': 1.0,  # coefficient for L1 penalty
+            'c1': 1,  # coefficient for L1 penalty
             'c2': 1e-3,  # coefficient for L2 penalty
-            'max_iterations': 100,  # stop earlier
+            'max_iterations': 100,  # stop after
             # include transitions that are possible, but not observed
             'feature.possible_transitions': True
         }
