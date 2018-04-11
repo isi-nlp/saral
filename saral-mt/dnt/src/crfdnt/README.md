@@ -72,17 +72,22 @@ optional arguments:
   -h, --help            show this help message and exit
   -i INP, --inp INP     Input stream of Training data. Default is STDIN. When
                         specified, it should be a file path. Data
-                        Format=SRC_SEQUENCE\tTAG_SEQUENCE per line (default:
+                        Format=SRC_SEQUENCE\tTAG_SEQUENCE per line by default
+                        Data Format=SRC_SEQUENCE\tTGT_SEQUENCE i.e. parallel
+                        bitext when --bitext is used (default:
                         <_io.TextIOWrapper name='<stdin>' mode='r'
                         encoding='UTF-8'>)
   -c CONTEXT, --context CONTEXT
                         Context in sequence. (default: 2)
+  -bt, --bitext         input is a parallel bitext (default: False)
   -v, --verbose         Verbose (default: False)
 ```
 
 **Example**
 ```
  python -m crfdnt train -i train-seq.tsv dnt-model1.pycrf
+ # From training data directly
+ paste train.src train.tgt | python -m crfdnt train -bt dnt-model1.pycrf
 ```
 
 
@@ -102,11 +107,8 @@ optional arguments:
                         Format=SRC_SEQUENCE\tTAG_SEQUENCE per line (default:
                         <_io.TextIOWrapper name='<stdin>' mode='r'
                         encoding='UTF-8'>)
-  -c CONTEXT, --context CONTEXT
-                        Context in sequence. (default: 2)
   -e, --explain         Explain top state transitions and weights (default:
                         False)
-
 ```
 
 **Example**
@@ -135,15 +137,11 @@ optional arguments:
                         Format=SRC_SEQUENCE\tTAG_SEQUENCE per line. (default:
                         <_io.TextIOWrapper name='<stdout>' mode='w'
                         encoding='UTF-8'>)
-  -c CONTEXT, --context CONTEXT
-                        Context in sequence. (default: 2)
-
 ```
 **Example**
 
 ```
 cat test-seq.tsv | cut -f1 | python -m crfdnt tag  dnt-model1.pycrf
-
 ```
 
 

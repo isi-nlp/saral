@@ -5,6 +5,9 @@ import pycrfsuite as pycrf
 import logging as log
 from crfdnt.utils import evaluate_multi_class
 from collections import Counter
+import random
+
+from .utils import tag_src_iob
 
 log.basicConfig(level=log.INFO)
 
@@ -20,18 +23,25 @@ class Featurizer(object):
         """
         self._version = 1
         self.context = context
+        self.pos_vocab = set()
+        self.neg_vocab = set()
 
-    @staticmethod
-    def featurize_word(word):
+    def featurize_word(self, word):
+        lc_word = word.lower()
         buff = f'''
         bias
-        word.lower={word.lower()}
+        word.lower={lc_word}
         word.isupper={word.isupper()}
         word.islower={word.islower()}
         word.istitle={word.istitle()}
         word.isdigit={word.isdigit()}
         '''
-        return [x.strip() for x in buff.strip().split('\n')]
+        feats = [x.strip() for x in buff.strip().split('\n')]
+        if lc_word in self.pos_vocab:
+            feats.append('word.pos_vocab')
+        if lc_word in self.neg_vocab:
+            feats.append('word.neg_vocab')
+        return feats
 
     def featurize_seq(self, words):
         seq = [self.featurize_word(word) for word in words]
@@ -65,6 +75,22 @@ class Featurizer(object):
                 yield seq, tags
             else:
                 yield seq
+
+    def featurize_parallel_set(self, stream, swap=False, update_vocab_prob=0.7):
+        for line in stream:
+            line = line.strip()
+            src, tgt = line.split('\t')
+            if swap:
+                src, tgt = tgt, src
+            src, tgt = src.split(), tgt.split()
+            tags = tag_src_iob(src, tgt)
+            assert len(src) == len(tags)
+            if update_vocab_prob > 0 and random.uniform(0, 1) <= update_vocab_prob:
+                self.pos_vocab.update(tgt)
+                self.neg_vocab.update(src)
+
+            x_seq = self.featurize_seq(src)
+            yield x_seq, tags
 
 
 class CRFTrainer(pycrf.Trainer):
@@ -170,3 +196,4 @@ class CRFTagger(pycrf.Tagger):
 
         print("\nTop negative:")
         print_state_features(state_feats[-top_feats:])
+        print("\n")
