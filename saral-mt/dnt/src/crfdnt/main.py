@@ -35,12 +35,13 @@ def prepare(inp, out, format, swap=False):
                 tgt, src = src, tgt
             src, tgt = src.split(), tgt.split()
             tags = tag_src_iob(src, tgt)
+            assert len(tags) == len(src)
             if format == 'src-tags':
                 yield (' '.join(src), ' '.join(tags))
             elif format == 'tags':
                 yield (' '.join(tags),)
             elif format == 'conll':
-                yield from zip(src, tgt)
+                yield from zip(src, tags)
                 yield ('',)  # empty line at the end of sentence
             else:
                 raise Exception(f'Unknown format requested: {format}')
