@@ -30,6 +30,8 @@ def restore_dnt(text, dnt_words, ignore_errors, dnt_pattern):
                 out_word = dnt_words[pos - 1]  # DNT index starts from 1
             elif not ignore_errors:
                 raise Exception('Cant find replacement. DNT Index=%d, DNT Words=%s' % (pos, dnt_words))
+            else:
+                out_word = ''
         res.append(out_word)
     return ' '.join(res)
 
