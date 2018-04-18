@@ -7,11 +7,12 @@ import logging as log
 from crfdnt.utils import evaluate_multi_class
 from collections import Counter
 import random
+import pickle
+import unicodedata as ud
 
 from .utils import tag_src_iob
 
 log.basicConfig(level=log.INFO)
-import pickle
 
 
 class Featurizer(object):
@@ -39,15 +40,27 @@ class Featurizer(object):
         word.islower={word.islower()}
         word.istitle={word.istitle()}
         word.isdigit={word.isdigit()}
+        word.ispunct={self.is_punct(word)}
         '''
         feats = [x.strip() for x in buff.strip().split('\n')]
         if self.memorize:
-            feats.append(f'word.lower = {lc_word}')
+            feats.append(f'word.lower={lc_word}')
         if lc_word in self.pos_vocab:
             feats.append('word.pos_vocab')
         if lc_word in self.neg_vocab:
             feats.append('word.neg_vocab')
         return feats
+
+    @staticmethod
+    def is_punct(tok):
+        """
+        :param tok: token
+        :return: True if token is made of only punctuation characters; False otherwise
+        """
+        for x in tok:
+            if ud.category(x)[0] != 'P':
+                return False
+        return True
 
     def featurize_seq(self, words):
         seq = [self.featurize_word(word) for word in words]
