@@ -18,26 +18,30 @@ class Featurizer(object):
     Creates features for sequences
     """
 
-    def __init__(self, context):
+    def __init__(self, context, memorize=True):
         """
-        :param context: number of words in context (backsize and front side) to use for features
+        :param context: number of words in context (back side and front side) to use for features
+        :param memorize: memorize words
         """
         self._version = 1
         self.context = context
         self.pos_vocab = set()
         self.neg_vocab = set()
+        self.memorize = memorize
+        log.info(f"Memorize words: {self.memorize}")
 
     def featurize_word(self, word):
         lc_word = word.lower()
         buff = f'''
         bias
-        word.lower={lc_word}
         word.isupper={word.isupper()}
         word.islower={word.islower()}
         word.istitle={word.istitle()}
         word.isdigit={word.isdigit()}
         '''
         feats = [x.strip() for x in buff.strip().split('\n')]
+        if self.memorize:
+            feats.append(f'word.lower = {lc_word}')
         if lc_word in self.pos_vocab:
             feats.append('word.pos_vocab')
         if lc_word in self.neg_vocab:
@@ -85,7 +89,7 @@ class Featurizer(object):
             line = line.strip()
             if not line:
                 continue
-            if not '\t' in line:
+            if '\t' not in line:
                 print(f"Error! Cant split  :: {line}", file=sys.stderr)
                 continue
             src, tgt = line.split('\t')
@@ -94,7 +98,7 @@ class Featurizer(object):
             src, tgt = src.split(), tgt.split()
             tags = tag_src_iob(src, tgt)
             assert len(src) == len(tags)
-            if update_vocab_prob > 0 and random.uniform(0, 1) <= update_vocab_prob:
+            if self.memorize and update_vocab_prob > 0 and random.uniform(0, 1) <= update_vocab_prob:
                 self.pos_vocab.update(tgt)
                 self.neg_vocab.update(src)
 

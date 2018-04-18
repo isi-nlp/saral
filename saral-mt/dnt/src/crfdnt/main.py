@@ -50,8 +50,8 @@ def prepare(inp, out, format, swap=False):
     log.info(f"Wrote {count} records, format={format}")
 
 
-def train(inp, model, context, verbose, bitext=False, **kwargs):
-    featurizer = Featurizer(context)
+def train(inp, model, context, verbose, bitext=False, no_memorize=False, **kwargs):
+    featurizer = Featurizer(context, memorize=not no_memorize)
     train_data = featurizer.featurize_parallel_set(inp) if bitext else featurizer.featurize_dataset(inp)
     train_data = list(train_data)
 
@@ -235,6 +235,9 @@ def get_arg_parser():
             Data Format=SRC_SEQUENCE\\tTGT_SEQUENCE i.e. parallel bitext when --bitext is used''')
     train_arg_parser.add_argument('-c', '--context', type=int, default=2, help="Context in sequence.")
     train_arg_parser.add_argument('-bt', '--bitext', action='store_true', help="input is a parallel bitext")
+
+    train_arg_parser.add_argument('-nm', '--no-memorize', action='store_true', default=False,
+                                  help="Do not memorize words")
     train_arg_parser.add_argument('-v', '--verbose', action='store_true', default=False, help="Verbose")
 
     # Tagging
