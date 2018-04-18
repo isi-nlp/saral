@@ -12,7 +12,7 @@ import logging as log
 import re
 import pickle
 
-from .utils import tag_src_iob
+from .utils import tag_src_iob, dnt_tag_toks, evaluate_multi_class
 from .tagger import Featurizer, CRFTagger, CRFTrainer
 
 log.basicConfig(level=log.INFO)
@@ -30,21 +30,27 @@ def prepare(inp, out, format, swap=False):
         if format == 'conll':
             yield ()
         for rec in inp:
+            if '\t' not in rec:
+                raise Exception(f'Invalid record: cant split:: {rec}')
             src, tgt = rec.split('\t')
             if swap:
                 tgt, src = src, tgt
             src, tgt = src.split(), tgt.split()
-            tags = tag_src_iob(src, tgt)
-            assert len(tags) == len(src)
-            if format == 'src-tags':
-                yield (' '.join(src), ' '.join(tags))
-            elif format == 'tags':
+            if format == 'TN':
+                tags = ['N' if tag else 'T' for tok, tag in dnt_tag_toks(src, tgt)]
                 yield (' '.join(tags),)
-            elif format == 'conll':
-                yield from zip(src, tags)
-                yield ('',)  # empty line at the end of sentence
             else:
-                raise Exception(f'Unknown format requested: {format}')
+                tags = tag_src_iob(src, tgt)
+                assert len(tags) == len(src)
+                if format == 'src-tags':
+                    yield (' '.join(src), ' '.join(tags))
+                elif format == 'tags':
+                    yield (' '.join(tags),)
+                elif format == 'conll':
+                    yield from zip(src, tags)
+                    yield ('',)  # empty line at the end of sentence
+                else:
+                    raise Exception(f'Unknown format requested: {format}')
 
     count = write_recs(iob_tag(), out)
     log.info(f"Wrote {count} records, format={format}")
@@ -62,23 +68,37 @@ def train(inp, model, context, verbose, bitext=False, no_memorize=False, **kwarg
     trainer.train_model(train_data, model, **kwargs)
 
 
-def evaluate(inp, model, explain=False):
+def evaluate_model(inp, model, explain=False):
 
     tagger = CRFTagger(model)
     with open(model + FEATS_SUFFIX, 'rb') as f:
-        featurizer = pickle.load(f)
+        featurizer = Featurizer.load(f)
     test_data = list(featurizer.featurize_dataset(inp))
     if explain:
         tagger.explain()
     tagger.evaluate(test_data)
 
 
-def tag(inp, out, model):
+def evaluate_result(inp):
+    recs = (line.strip().split('\t') for line in inp)
+    recs = ((pred.split(), gold.split()) for pred, gold in recs)
+    evaluate_multi_class(lambda x: x, recs, do_print=True)
+
+
+def tag(inp, out, model, format='tags'):
     tagger = CRFTagger(model)
     with open(model + FEATS_SUFFIX, 'rb') as f:
-        featurizer = pickle.load(f)
+        featurizer = Featurizer.load(f)
     data = featurizer.featurize_dataset(inp)
-    y_seqs = ([' '.join(tagger.tag(xseq))] for xseq in data)
+    y_seqs = (tagger.tag(x_seq) for x_seq in data)
+    if format == 'tags':
+        pass
+    elif format == 'TN':
+        # Convert tags to binary
+        y_seqs = (['T' if y == 'O' else 'N' for y in y_seq] for y_seq in y_seqs)
+    else:
+        raise Exception(f'Unknown Format {format}')
+    y_seqs = ((' '.join(y_seq),) for y_seq in y_seqs)
     write_recs(y_seqs, out)
 
 
@@ -207,6 +227,9 @@ def get_arg_parser():
     eval_arg_parser = sub_parsers.add_parser('eval', help='Evaluate a CRF DNT model',
                                              formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
+    eval_res_arg_parser = sub_parsers.add_parser('eval-res', help='Evaluate Result of tagger',
+                                                 formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+
     cut_arg_parser = sub_parsers.add_parser('dnt-cut', help='Cut DNT words',
                                             formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
@@ -222,10 +245,11 @@ def get_arg_parser():
             Output stream. Default is STDOUT. When specified, it should be a file path. 
             Data Format depends on the (-f, --format) argument''')
     prep_arg_parser.add_argument('-s', '--swap', action='store_true', help='Swap the columns in input')
-    prep_arg_parser.add_argument('-f', '--format', choices=['src-tags', 'tags', 'conll'], default='src-tags', type=str,
+    prep_arg_parser.add_argument('-f', '--format', choices=['src-tags', 'tags', 'conll', 'TN'], default='src-tags', type=str,
                                  help='''Format of output: `src-tag`: output SOURCE\\tTAG per line.
                                    `tag`: output just TAG sequence per line.
-                                   `conll`: output in CoNLL 2013 NER format.''')
+                                   `conll`: output in CoNLL 2013 NER format. 
+                                   `TN`: outputs binary flags: T for Translate, N for Not-translate''')
 
     # Train
     train_arg_parser.add_argument('model', type=str, help='''Path to store model file''')
@@ -248,6 +272,10 @@ def get_arg_parser():
     tag_arg_parser.add_argument('-o', '--out', default=sys.stdout, type=argparse.FileType('w'), help='''
         Output stream. Default is STDOUT. When specified, it should be a file path. 
         Data Format=SRC_SEQUENCE\\tTAG_SEQUENCE per line.''')
+    tag_arg_parser.add_argument('-f', '--format', choices=['tags', 'TN'], default='tags',
+                                 type=str, help='''Format of output: 
+                                       `tag`: output just TAG sequence per line. 
+                                       `TN`: outputs binary flags: T for Translate, N for Not-translate''')
 
     # Evaluation
     eval_arg_parser.add_argument('model', type=str, help='''Path to the stored model file''')
@@ -256,6 +284,10 @@ def get_arg_parser():
             Data Format=SRC_SEQUENCE\\tTAG_SEQUENCE per line''')
     eval_arg_parser.add_argument('-e', '--explain', action='store_true',
                                  help='Explain top state transitions and weights')
+
+    eval_res_arg_parser.add_argument('-i', '--inp', default=sys.stdin, type=argparse.FileType('r'), help='''
+                Input stream of result and gold. Default is STDIN. When specified, it should be a file path. 
+                Data Format=PREDICTED_SEQUENCE\\tGOLD_SEQUENCE per line''')
 
     # Cut task
     cut_arg_parser.add_argument('model', type=str, help='''Path to the stored model file''')
@@ -281,7 +313,8 @@ def main():
         'train': train,
         'prepare': prepare,
         'tag': tag,
-        'eval': evaluate,
+        'eval': evaluate_model,
+        'eval-res': evaluate_result,
         'dnt-cut': dnt_cut,
         'dnt-paste': dnt_paste,
     }

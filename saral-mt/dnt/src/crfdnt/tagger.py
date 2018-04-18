@@ -11,6 +11,7 @@ import random
 from .utils import tag_src_iob
 
 log.basicConfig(level=log.INFO)
+import pickle
 
 
 class Featurizer(object):
@@ -23,7 +24,7 @@ class Featurizer(object):
         :param context: number of words in context (back side and front side) to use for features
         :param memorize: memorize words
         """
-        self._version = 1
+        self._version = 2
         self.context = context
         self.pos_vocab = set()
         self.neg_vocab = set()
@@ -105,6 +106,16 @@ class Featurizer(object):
             x_seq = self.featurize_seq(src)
             yield x_seq, tags
 
+    def migrate(self):
+        if self._version < 2:
+            self.memorize = True
+
+    @staticmethod
+    def load(stream):
+        obj = pickle.load(stream)
+        obj.migrate()
+        return obj
+
 
 class CRFTrainer(pycrf.Trainer):
     """
@@ -157,22 +168,8 @@ class CRFTagger(pycrf.Tagger):
         log.info(f"Loading model from {model_path}")
         self.open(model_path)
 
-    def evaluate(self, test_set, label_mapper=None, just=15):
-        recs = evaluate_multi_class(self.tag, test_set, label_mapper)
-        keys = ['Label', 'GoldCount', 'PredictedCount', 'Correct', 'Precision', 'Recall', 'F1']
-
-        def print_row(row):
-            row = ['%.6f' % cell if type(cell) is float else str(cell) for cell in row]
-            print(''.join(cell.rjust(just) for cell in row))
-
-        print_row(keys)
-        for rec in recs:
-            print_row([rec[key] for key in keys])
-
-        avg = ['(Average)', '', '', '']
-        avg.extend([sum(rec[col] for rec in recs) / len(recs) for col in ['Precision', 'Recall', 'F1']])
-        print_row(avg)
-        return recs
+    def evaluate(self, test_set, label_mapper=None):
+        return evaluate_multi_class(self.tag, test_set, label_mapper, do_print=True)
 
     def explain(self, top_trans=10, top_feats=20):
         """

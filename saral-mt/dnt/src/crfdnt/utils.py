@@ -73,12 +73,13 @@ def tag_src_iob(src, tgt, tag='DNT'):
     return tags
 
 
-def evaluate_multi_class(label_func, test_set, label_normalizer=None):
+def evaluate_multi_class(label_func, test_set, label_normalizer=None, do_print=True):
     """
     Evaluates a multi class labelling function
     :param label_func: function that accepts X and returns predictions
     :param test_set: stream of records, each having (X, Y) where X is input and Y is gold. Both X and Y are sequences
     :param label_normalizer: optional function to map label names
+    :param do_print: print the results
     :return: List of records, one per label
     """
     conf_matrix = defaultdict(lambda: defaultdict(int))
@@ -106,4 +107,23 @@ def evaluate_multi_class(label_func, test_set, label_normalizer=None):
         rec['Recall'] = rec['Correct'] / rec['GoldCount']
         rec['F1'] = 2 * rec['Precision'] * rec['Recall'] / (rec['Precision'] + rec['Recall'])
         result.append(rec)
+    if do_print:
+        print_eval(result)
     return result
+
+
+def print_eval(recs, just=15):
+
+    keys = ['Label', 'GoldCount', 'PredictedCount', 'Correct', 'Precision', 'Recall', 'F1']
+
+    def print_row(row):
+        row = ['%.6f' % cell if type(cell) is float else str(cell) for cell in row]
+        print(''.join(cell.rjust(just) for cell in row))
+
+    print_row(keys)
+    for rec in recs:
+        print_row([rec[key] for key in keys])
+
+    avg = ['(Average)', '', '', '']
+    avg.extend([sum(rec[col] for rec in recs) / len(recs) for col in ['Precision', 'Recall', 'F1']])
+    print_row(avg)
