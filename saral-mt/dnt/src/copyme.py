@@ -14,11 +14,23 @@ import shutil
 import atexit
 
 import skip
+import unicodedata as ud
 
 scriptdir = os.path.dirname(os.path.abspath(__file__))
 
 reader = codecs.getreader('utf8')
 writer = codecs.getwriter('utf8')
+
+
+def is_punct(tok):
+    """
+    :param tok: token
+    :return: True if token is made of only punctuation characters; False otherwise
+    """
+    for x in tok:
+        if ud.category(x)[0] != 'P':
+            return False
+    return True
 
 
 def prepfile(fh, code):
@@ -53,7 +65,9 @@ def main():
     parser.add_argument("--dict", "-D", default=None, type=argparse.FileType('r'), help="dictionary to filter against")
     parser.add_argument("--antidict", "-N", default=None, type=argparse.FileType('r'),
                         help="dictionary of terms to include")
+
     parser.add_argument("--copysymbol", default="@@", help="how to mark")
+    parser.add_argument("-ep", "--exclude-puncts", default=False, action='store_true', help="Exclude Punctuations")
     parser.add_argument("--version", "-v", type=int, default=5, help="what version of skip heuristcs")
     workdir = tempfile.mkdtemp(prefix=os.path.basename(__file__), dir=os.getenv('TMPDIR', '/tmp'))
 
@@ -61,6 +75,7 @@ def main():
         args = parser.parse_args()
     except IOError as msg:
         parser.error(str(msg))
+        sys.exit(2)
 
     def cleanwork():
         shutil.rmtree(workdir, ignore_errors=True)
@@ -90,7 +105,10 @@ def main():
         otoks = []
         skipcount = 0
         for tok in line.strip().split():
-            outcome, tok = skip.skip(tok, args.version)
+            if args.exclude_puncts and is_punct(tok):
+                outcome, tok = False, tok
+            else:
+                outcome, tok = skip.skip(tok, args.version)
             if outcome:
                 tok = "{}{}".format(args.copysymbol, tok)
                 skipcount += 1
