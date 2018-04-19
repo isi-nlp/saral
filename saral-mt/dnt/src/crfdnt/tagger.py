@@ -9,6 +9,7 @@ from collections import Counter
 import random
 import pickle
 import unicodedata as ud
+from emoji import UNICODE_EMOJI
 
 from .utils import tag_src_iob
 
@@ -25,7 +26,7 @@ class Featurizer(object):
         :param context: number of words in context (back side and front side) to use for features
         :param memorize: memorize words
         """
-        self._version = 2
+        self._version = 3
         self.context = context
         self.pos_vocab = set()
         self.neg_vocab = set()
@@ -40,8 +41,18 @@ class Featurizer(object):
         word.islower={word.islower()}
         word.istitle={word.istitle()}
         word.isdigit={word.isdigit()}
-        word.ispunct={self.is_punct(word)}
-        '''
+        word.ispunct={self.is_punct(word)}'''
+        if self._version >= 3:
+            buff += f'''
+            word.isurl={lc_word.startswith('http')}
+            word.has_scheme={'://' in word }
+            word.has_at={'@' in word }
+            word.begin_at={word.startswith('@')}
+            word.has_hash={'#' in word}
+            word.begin_hash={word.startswith('#')}
+            word.is_emoji={self.is_emoji(word)}
+            word.has_emoji={self.has_emoji(word)}
+            '''
         feats = [x.strip() for x in buff.strip().split('\n')]
         if self.memorize:
             feats.append(f'word.lower={lc_word}')
@@ -61,6 +72,28 @@ class Featurizer(object):
             if ud.category(x)[0] != 'P':
                 return False
         return True
+
+    @staticmethod
+    def is_emoji(tok):
+        """
+        :param tok: token
+        :return: True if token is made of only emoji characters; False otherwise
+        """
+        for x in tok:
+            if x not in UNICODE_EMOJI:
+                return False
+        return True
+
+    @staticmethod
+    def has_emoji(tok):
+        """
+        :param tok: token
+        :return: True if token is made of at least one emoji characters; False otherwise
+        """
+        for x in tok:
+            if x in UNICODE_EMOJI:
+                return True
+        return False
 
     def featurize_seq(self, words):
         seq = [self.featurize_word(word) for word in words]

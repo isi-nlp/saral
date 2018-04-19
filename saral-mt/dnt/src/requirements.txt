@@ -3,3 +3,4 @@
 # For CRF based NER tagger
 # python>=3.6
 python-crfsuite
+emoji
