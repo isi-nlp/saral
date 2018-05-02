@@ -11,30 +11,37 @@ log.basicConfig(level=log.DEBUG)
 log.info(f'Spacy Version: {spacy.__version__}')
 
 
-def tag_all(recs, model='en_core_web_sm', other_tag='O'):
-    '''
-    Tags a stream of lines with NER annotation
-    :param recs: stream of lines
-    :param model: Spacy Model name
-    :param other_tag: tag the non NE tokens as this tag
-    :return: yields tuples ([toks...], [tags...])
-    '''
-    log.info(f'Loading spacy model {model}')
-    try:
-        nlp = spacy.load(model, disable=['parser'])
-        log.debug(f'Loaded spacy model {model}')
-    except OSError as e:
-        log.error(f'Failed to load model.  Please run `python -m spacy download {model}` to download the model')
-        raise e
-    for line in recs:
-        doc = nlp(line.strip())
+class NER(object):
+
+    def __init__(self, model='en_core_web_sm'):
+        log.info(f'Loading spacy model {model}')
+        try:
+            self.model = spacy.load(model, disable=['parser'])
+            log.debug(f'Loaded spacy model {model}')
+        except OSError as e:
+            log.error(f'Failed to load model.  Please run `python -m spacy download {model}` to download the model')
+            raise e
+
+    def tag(self, text, other_tag):
+        doc = self.model(text)
         ent_types = [tok.ent_type_ if tok.ent_type_ else other_tag for tok in doc]
-        yield list(map(str, doc)), ent_types
+        return list(map(str, doc)), ent_types
+
+    def tag_all(self, recs, other_tag='O'):
+        """Tags a stream of lines with NER annotation
+        :param recs: stream of lines
+        :param model: Spacy Model name
+        :param other_tag: tag the non NE tokens as this tag
+        :return: yields tuples ([toks...], [tags...])
+        """
+        for line in recs:
+            yield self.tag(line.strip(), other_tag)
 
 
 def main(fin, fout, model):
+    nlp = NER(model)
     count = 0
-    for toks, tags in tag_all(fin, model):
+    for toks, tags in nlp.tag_all(fin):
         fout.write(' '.join(toks))
         fout.write('\t')
         fout.write(' '.join(tags))
