@@ -7,6 +7,18 @@ import json
 
 from ner import NER
 from collections import defaultdict as ddict
+import unicodedata as ud
+
+
+def is_punct(tok):
+    """
+    :param tok: text
+    :return: True if the text is not solely made of punctuation characters
+    """
+    for ch in tok:
+        if not ud.category(ch).startswith('P'):
+            return False
+    return True
 
 
 def project_tags(seq1, seq1_tags, seq2, other_tag='O', overwrite_tag='MISC'):
@@ -28,7 +40,7 @@ def project_tags(seq1, seq1_tags, seq2, other_tag='O', overwrite_tag='MISC'):
         tag = other_tag
         if norm_tok in seq1_tag_lookup:  # DNT word
             tag = seq1_tag_lookup[norm_tok]
-            if tag == other_tag:    # DNT word tagged as `other` by the previous tagger
+            if tag == other_tag and not is_punct(norm_tok):    # DNT word tagged as `other` by the previous tagger
                 tag = overwrite_tag
         seq2_tags.append(tag)
     return seq2_tags
