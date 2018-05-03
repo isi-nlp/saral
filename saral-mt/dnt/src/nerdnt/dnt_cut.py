@@ -8,7 +8,9 @@ import json
 from ner import NER
 from collections import defaultdict as ddict
 import unicodedata as ud
+import logging as log
 
+log.basicConfig(level=log.INFO)
 
 def is_punct(tok):
     """
@@ -49,7 +51,11 @@ def project_tags(seq1, seq1_tags, seq2, other_tag='O', overwrite_tag='MISC'):
 def replace_all(inp, model):
     ner = NER(model)
     for line in inp:
-        src, tgt = line.strip().split('\t')
+        line = line.strip()
+        if not '\t' in line:
+            log.warning(f'Skip line (not enough colums): {line}')
+            continue
+        src, tgt = line.split('\t')
         src = src.split()
         tgt, tgt_tags = ner.tag(tgt, other_tag='O')
         src_tags = project_tags(tgt, tgt_tags, src)
