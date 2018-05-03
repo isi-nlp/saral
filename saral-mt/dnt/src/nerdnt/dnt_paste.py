@@ -8,7 +8,7 @@ import json
 import logging as log
 
 log.basicConfig(level=log.INFO)
-DNT_PATTERN = re.compile(r"DNT_([^_]+)_(\d+)")
+DNT_PATTERN = re.compile(r"^DNT_(.+)_(\d+)$")
 
 
 def restore_dnt(text, dnt_words):
