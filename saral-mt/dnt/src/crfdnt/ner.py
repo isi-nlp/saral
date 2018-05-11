@@ -4,7 +4,7 @@
 # Created On: May 1, 2018
 
 import spacy
-import sys
+from spacy.tokens import Doc
 import logging as log
 import unicodedata as ud
 
@@ -19,6 +19,8 @@ class NER(object):
         try:
             self.model = spacy.load(model, disable=['parser'])
             log.debug(f'Loaded spacy model {model}')
+            # The default Tokenizer breaks punctuations. Expect pre tokenized input
+            self.model.tokenizer = WhitespaceTokenizer(self.model.vocab)
         except OSError as e:
             log.error(f'Failed to load model.  Please run `python -m spacy download {model}` to download the model')
             raise e
@@ -82,6 +84,18 @@ class NER(object):
             seq2_tags.append(tag)
         return seq2_tags
 
+
+class WhitespaceTokenizer(object):
+
+    """White Space tokenizer for spacy."""
+    def __init__(self, vocab):
+        self.vocab = vocab
+
+    def __call__(self, text):
+        words = text.split(' ')
+        # All tokens 'own' a subsequent space character in this tokenizer
+        spaces = [True] * len(words)
+        return Doc(self.vocab, words=words, spaces=spaces)
 
 
 def is_punct(tok):
