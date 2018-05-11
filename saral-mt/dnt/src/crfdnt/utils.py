@@ -214,7 +214,7 @@ def cut_dnt_groups(src, src_tags, tgt=None):
     for phrases in memory.values():
         for i, words in enumerate(phrases):
             phrases[i] = ' '.join(words)
-    rec = [' '.join(src_out), json.dumps(memory)]
+    rec = [' '.join(src_out), json.dumps(memory, ensure_ascii=False)]
     if tgt:
         rec.insert(1, ' '.join(tgt_out))
     return rec
