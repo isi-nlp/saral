@@ -202,7 +202,7 @@ def dnt_paste(inp, out, ignore_errors=True):
 
 def get_arg_parser():
     # TODO: reorganize these parsers as parent-child, avoid redefinition of arguments
-    parser = argparse.ArgumentParser(description='Do Not Translate (DNT) tagger',
+    parser = argparse.ArgumentParser(description='Do Not Translate (DNT) tagger', prog='crfdnt',
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     sub_parsers = parser.add_subparsers(help='tasks', dest='task')
     sub_parsers.required = True

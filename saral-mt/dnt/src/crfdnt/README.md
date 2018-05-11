@@ -1,5 +1,6 @@
 # CRF DNT Tagger
 
+
 Goal: Build and evaluate a DO NOT TRANSLATE (DNT) Tagger model from MT
  parallel data using CRF.
 
@@ -17,14 +18,15 @@ pip install python-crfsuite
 
 # add src directory to the path variable
 export PYTHONPATH=...saral/saral-mt/dnt/src
+alias crfdnt="python -m crfdnt"
 ```
 
 
 ## 1. Prepare
 
 ```
-$ python -m crfdnt prepare -h
-usage: __main__.py prepare [-h] [-i INP] [-o OUT] [-s]
+$ crfdnt prepare -h
+usage: crfdnt prepare [-h] [-i INP] [-o OUT] [-s]
                            [-f {src-tags,tags,conll}]
 
 optional arguments:
@@ -39,17 +41,24 @@ optional arguments:
                         --format) argument (default: <_io.TextIOWrapper
                         name='<stdout>' mode='w' encoding='UTF-8'>)
   -s, --swap            Swap the columns in input (default: False)
-  -f {src-tags,tags,conll}, --format {src-tags,tags,conll}
+  -f {src-tags,tags,conll,TN}, --format {src-tags,tags,conll,TN}
                         Format of output: `src-tag`: output SOURCE\tTAG per
                         line. `tag`: output just TAG sequence per line.
-                        `conll`: output in CoNLL 2013 NER format. (default:
-                        src-tags)
+                        `conll`: output in CoNLL 2013 NER format. `TN`:
+                        outputs binary flags: T for Translate, N for Not-
+                        translate (default: src-tags)
+ -ner NER_MODEL, --ner-model NER_MODEL
+                        NER model for categorising the DNT tags. NER is
+                        powered by Spacy, hence the value should be a valid
+                        spacy model. Example: {en_core_web_sm, en_core_web_md,
+                        en_core_web_lg}. When not specified, no NER
+                        categorization will be done. (default: None)
 ```
 
 **Example**
 
 ```
-cat lang1-lang2.tsv | python -m crfdnt prepare > all-seq.tsv
+cat lang1-lang2.tsv | crfdnt prepare > all-seq.tsv
 
 # split all-seq into train and test
 cat all-seq.tsv | shuf > all-seq-shuf.tsv
@@ -62,8 +71,8 @@ mv partab test-seq.tsv
 ## 2. Train
 
 ```
-python -m crfdnt train -h
-usage: __main__.py train [-h] [-i INP] [-c CONTEXT] model
+crfdnt train -h
+usage: crfdnt train [-h] [-i INP] [-c CONTEXT] model
 
 positional arguments:
   model                 Path to store model file
@@ -80,22 +89,30 @@ optional arguments:
   -c CONTEXT, --context CONTEXT
                         Context in sequence. (default: 2)
   -bt, --bitext         input is a parallel bitext (default: False)
+  -ner NER_MODEL, --ner-model NER_MODEL
+                        Applicable for --bitext mode. NER model for
+                        categorising the tags. NER is powered by Spacy, hence
+                        the value should be a valid spacy model. Example:
+                        {en_core_web_sm, en_core_web_md, en_core_web_lg}. When
+                        not specified, no NER categorization will be done.
+                        (default: None)
+  -nm, --no-memorize    Do not memorize words (default: False)
   -v, --verbose         Verbose (default: False)
 ```
 
 **Example**
 ```
- python -m crfdnt train -i train-seq.tsv dnt-model1.pycrf
+ crfdnt train -i train-seq.tsv dnt-model1.pycrf
  # From training data directly
- paste train.src train.tgt | python -m crfdnt train -bt dnt-model1.pycrf
+ paste train.src train.tgt | crfdnt train -bt dnt-model1.pycrf
 ```
 
 
 ## Evaluate
 
 ```
-python -m crfdnt eval -h
-usage: __main__.py eval [-h] [-i INP] [-c CONTEXT] [-e] model
+crfdnt eval -h
+usage: crfdnt eval [-h] [-i INP] [-c CONTEXT] [-e] model
 
 positional arguments:
   model                 Path to the stored model file
@@ -114,13 +131,13 @@ optional arguments:
 **Example**
 
 ```
-python -m crfdnt eval -i test-seq.tsv dnt-model1.pycrf -e
+crfdnt eval -i test-seq.tsv dnt-model1.pycrf -e
 ```
 
 
 # Predict tags for new sequence
 ```
-python -m crfdnt tag -h
+crfdnt tag -h
 usage: __main__.py tag [-h] [-i INP] [-o OUT] [-c CONTEXT] model
 
 positional arguments:
@@ -141,7 +158,7 @@ optional arguments:
 **Example**
 
 ```
-cat test-seq.tsv | cut -f1 | python -m crfdnt tag  dnt-model1.pycrf
+cat test-seq.tsv | cut -f1 | crfdnt tag  dnt-model1.pycrf
 ```
 
 
