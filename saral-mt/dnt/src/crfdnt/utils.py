@@ -3,7 +3,11 @@
 
 
 import unicodedata as ud
-from collections import defaultdict
+from collections import defaultdict as ddict
+import json
+
+DELIM = "|+|"
+TEMPLATE = 'DNT_%d'
 
 
 def is_not_punct(tok):
@@ -82,7 +86,7 @@ def evaluate_multi_class(label_func, test_set, label_normalizer=None, do_print=T
     :param do_print: print the results
     :return: List of records, one per label
     """
-    conf_matrix = defaultdict(lambda: defaultdict(int))
+    conf_matrix = ddict(lambda: ddict(int))
     for x_seq, y_gold in test_set:
         y_pred = label_func(x_seq)
         assert len(x_seq) == len(y_gold) == len(y_pred)
@@ -103,9 +107,10 @@ def evaluate_multi_class(label_func, test_set, label_normalizer=None, do_print=T
             'PredictedCount': sum(row[label] for row in conf_matrix.values()),
             'Correct': conf_matrix[label][label]
         }
-        rec['Precision'] = rec['Correct'] / rec['PredictedCount']
-        rec['Recall'] = rec['Correct'] / rec['GoldCount']
-        rec['F1'] = 2 * rec['Precision'] * rec['Recall'] / (rec['Precision'] + rec['Recall'])
+        rec['Precision'] = rec['Correct'] / rec['PredictedCount'] if rec['PredictedCount'] > 0 else 0
+        rec['Recall'] = rec['Correct'] / rec['GoldCount'] if rec['GoldCount'] > 0 else 0
+        denominator = rec['Precision'] + rec['Recall']
+        rec['F1'] = (2 * rec['Precision'] * rec['Recall'] / denominator) if denominator > 0 else 0
         result.append(rec)
     if do_print:
         print_eval(result)
@@ -127,3 +132,89 @@ def print_eval(recs, just=15):
     avg = ['(Average)', '', '', '']
     avg.extend([sum(rec[col] for rec in recs) / len(recs) for col in ['Precision', 'Recall', 'F1']])
     print_row(avg)
+
+
+def cut_dnt_bio(src, src_tags, tgt=None):
+    """
+    Deprecated, use `cut_dnt_groups`
+    :param src:
+    :param src_tags:
+    :param tgt:
+    :return:
+    """
+    assert len(src_tags) == len(src)
+    src_cut, dnt_toks = [], []
+    last_tag = None
+    for word, tag in zip(src, src_tags):
+        if tag == 'O':
+            src_cut.append(word)
+        else:
+            if tag.startswith('B-') or last_tag == 'O':
+                # last == O and this tag!=B is an erroneous transition
+                dnt_toks.append([word])
+                src_cut.append(TEMPLATE % len(dnt_toks))
+            else:
+                # extend the last one
+                dnt_toks[-1].append(word)
+        last_tag = tag
+    tgt_cut = []
+    if tgt:
+        idx = 0
+        while idx < len(tgt):
+            dnt_idx = 0
+            for jdx, dnts in enumerate(dnt_toks):
+                if tgt[idx: idx + len(dnts)] == dnts:
+                    dnt_idx = jdx + 1
+                    idx += len(dnts)
+                    break
+            if dnt_idx:
+                tgt_cut.append(TEMPLATE % dnt_idx)
+            else:
+                tgt_cut.append(tgt[idx])
+                idx += 1
+    dnt_toks = [DELIM.join(x) for x in dnt_toks]
+    rec = [' '.join(src_cut), ' '.join(dnt_toks)]
+    if tgt:
+        rec.insert(1, ' '.join(tgt_cut))
+    return rec
+
+
+def cut_dnt_groups(src, src_tags, tgt=None):
+    """
+    Replaces source and target
+    :param src:
+    :param src_tags:
+    :param tgt:
+    :return:
+    """
+    memory = ddict(list)
+    src_out = []
+    tok_to_template = {}
+    for i, (tok, tag) in enumerate(zip(src, src_tags)):
+        if tag == 'O':
+            src_out.append(tok)
+        else:
+            if i > 0 and tag == src_tags[i - 1]:
+                # same as previous one, expand the previous DNT phrase
+                memory[tag][-1].append(tok)
+            else:
+                # create a new DNT phrase
+                memory[tag].append([tok])
+                src_out.append('DNT_%s_%d' % (tag, len(memory[tag])))
+            tok_to_template[tok.lower()] = src_out[-1]
+
+    if tgt:
+        tgt_out = []
+        for tok in tgt:
+            tok_out = tok_to_template.get(tok.lower(), tok)
+            if tgt_out and tok_out.startswith('DNT_') and tgt_out[-1] == tok_out:
+                continue  # part of a continuing DNT phrase
+            else:
+                tgt_out.append(tok_out)
+    for phrases in memory.values():
+        for i, words in enumerate(phrases):
+            phrases[i] = ' '.join(words)
+    rec = [' '.join(src_out), json.dumps(memory)]
+    if tgt:
+        rec.insert(1, ' '.join(tgt_out))
+    return rec

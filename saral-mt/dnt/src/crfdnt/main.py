@@ -11,24 +11,28 @@ import sys
 import logging as log
 import re
 import pickle
-
-from .utils import tag_src_iob, dnt_tag_toks, evaluate_multi_class
+import json
+from .utils import tag_src_iob, dnt_tag_toks, evaluate_multi_class, cut_dnt_bio, cut_dnt_groups
 from .tagger import Featurizer, CRFTagger, CRFTrainer
 
 log.basicConfig(level=log.INFO)
 
-
 FEATS_SUFFIX = ".feats.pkl"
 DELIM = "|+|"
 TEMPLATE = 'DNT_%d'
-RE_PATTERN = re.compile(r"DNT_(\d+)")
+RE_PATTERN = re.compile(r"^DNT(_(.+))?_(\d+)$")
 
 
-def prepare(inp, out, format, swap=False):
+def prepare(inp, out, format, swap=False, ner_model=None):
 
     def iob_tag():
         if format == 'conll':
             yield ()
+        ner = None
+        if ner_model:
+            from .ner import NER
+            ner = NER(ner_model)
+
         for rec in inp:
             if '\t' not in rec:
                 raise Exception(f'Invalid record: cant split:: {rec}')
@@ -40,14 +44,17 @@ def prepare(inp, out, format, swap=False):
                 tags = ['N' if tag else 'T' for tok, tag in dnt_tag_toks(src, tgt)]
                 yield (' '.join(tags),)
             else:
-                tags = tag_src_iob(src, tgt)
-                assert len(tags) == len(src)
+                if ner:
+                    tgt, tgt_tags, src, src_tags = ner.tag_and_project(tgt, src)
+                else:
+                    src_tags = tag_src_iob(src, tgt)
+                assert len(src_tags) == len(src)
                 if format == 'src-tags':
-                    yield (' '.join(src), ' '.join(tags))
+                    yield (' '.join(src), ' '.join(src_tags))
                 elif format == 'tags':
-                    yield (' '.join(tags),)
+                    yield (' '.join(src_tags),)
                 elif format == 'conll':
-                    yield from zip(src, tags)
+                    yield from zip(src, src_tags)
                     yield ('',)  # empty line at the end of sentence
                 else:
                     raise Exception(f'Unknown format requested: {format}')
@@ -56,10 +63,11 @@ def prepare(inp, out, format, swap=False):
     log.info(f"Wrote {count} records, format={format}")
 
 
-def train(inp, model, context, verbose, bitext=False, no_memorize=False, **kwargs):
-    featurizer = Featurizer(context, memorize=not no_memorize)
+def train(inp, model, context, verbose, bitext=False, no_memorize=False, ner_model=None, **kwargs):
+    featurizer = Featurizer(context, memorize=not no_memorize, ner_model=ner_model)
+
     train_data = featurizer.featurize_parallel_set(inp) if bitext else featurizer.featurize_dataset(inp)
-    train_data = list(train_data)
+    train_data = list(train_data)   # TODO: not load all into memory
 
     with open(model + FEATS_SUFFIX, 'wb') as f:
         pickle.dump(featurizer, f)
@@ -142,42 +150,11 @@ def dnt_cut(inp, out, model):
                 src, tgt = src.split(), tgt.split()
             else:
                 raise Exception("Input should be either SRC or SRC\\tTGT")
-            tags = tagger.tag(featurizer.featurize_seq(src))
-            assert len(tags) == len(src)
-            src_cut, dnt_toks = [], []
-            last_tag = None
-            for word, tag in zip(src, tags):
-                if tag == 'O':
-                    src_cut.append(word)
-                else:
-                    if tag.startswith('B-') or last_tag == 'O':
-                        # last == O and this tag!=B is an erroneous transition
-                        dnt_toks.append([word])
-                        src_cut.append(TEMPLATE % len(dnt_toks))
-                    else:
-                        # extend the last one
-                        dnt_toks[-1].append(word)
-                last_tag = tag
-
-            tgt_cut = []
-            if tgt:
-                idx = 0
-                while idx < len(tgt):
-                    dnt_idx = 0
-                    for jdx, dnts in enumerate(dnt_toks):
-                        if tgt[idx: idx + len(dnts)] == dnts:
-                            dnt_idx = jdx + 1
-                            idx += len(dnts)
-                            break
-                    if dnt_idx:
-                        tgt_cut.append(TEMPLATE % dnt_idx)
-                    else:
-                        tgt_cut.append(tgt[idx])
-                        idx += 1
-            dnt_toks = [DELIM.join(x) for x in dnt_toks]
-            rec = [' '.join(src_cut), ' '.join(dnt_toks)]
-            if tgt:
-                rec.insert(1, ' '.join(tgt_cut))
+            src_tags = tagger.tag(featurizer.featurize_seq(src))
+            if featurizer.is_group_mode():
+                rec = cut_dnt_groups(src, src_tags, tgt)
+            else:
+                rec = cut_dnt_bio(src, src_tags, tgt)
             yield rec
     write_recs(_dnt_cut(), out)
 
@@ -192,24 +169,35 @@ def dnt_paste(inp, out, ignore_errors=True):
     """
 
     def _dnt_paste():
+        err_count = 0
         for line in inp:
             text, dnt_words = line.split('\t')
-            text, dnt_words = text.split(), dnt_words.split()
-            dnt_words = [x.replace(DELIM, ' ') for x in dnt_words]
+            text, dnt_words = text.strip().split(), dnt_words.strip()
+            if dnt_words[0] == '{' and dnt_words[-1] == '}':
+                dnt_words = json.loads(dnt_words)
+            else:   # Old format
+                dnt_words = [x.replace(DELIM, ' ') for x in dnt_words.split()]
+
             res = []
             for word in text:
                 out_word = word
                 match = RE_PATTERN.match(word)
                 if match:
-                    pos = int(match.groups()[0])
+                    _, dnt_type, pos = match.groups()
+                    pos = int(pos)
+                    dnt_word_list = dnt_words.get(dnt_type, []) if dnt_type else dnt_words
                     assert pos > 0
-                    if pos <= len(dnt_words):
-                        out_word = dnt_words[pos - 1]  # DNT index starts from 1
-                    elif not ignore_errors:
+                    if pos <= len(dnt_word_list):
+                        out_word = dnt_word_list[pos - 1]  # DNT index starts from 1
+                    elif ignore_errors:
+                        out_word = ''
+                        err_count += 1
+                    else:
                         raise Exception('Cant find replacement. DNT Index=%d, DNT Words=%s' % (pos, dnt_words))
                 res.append(out_word)
             yield (' '.join(res),)
-    write_recs( _dnt_paste(), out)
+        log.warning(f"Found {err_count} DNT replacement errors..")
+    write_recs(_dnt_paste(), out)
 
 
 def get_arg_parser():
@@ -245,11 +233,17 @@ def get_arg_parser():
             Output stream. Default is STDOUT. When specified, it should be a file path. 
             Data Format depends on the (-f, --format) argument''')
     prep_arg_parser.add_argument('-s', '--swap', action='store_true', help='Swap the columns in input')
-    prep_arg_parser.add_argument('-f', '--format', choices=['src-tags', 'tags', 'conll', 'TN'], default='src-tags', type=str,
-                                 help='''Format of output: `src-tag`: output SOURCE\\tTAG per line.
+    prep_arg_parser.add_argument('-f', '--format', choices=['src-tags', 'tags', 'conll', 'TN'], default='src-tags',
+                                 type=str, help='''Format of output: `src-tag`: output SOURCE\\tTAG per line.
                                    `tag`: output just TAG sequence per line.
                                    `conll`: output in CoNLL 2013 NER format. 
                                    `TN`: outputs binary flags: T for Translate, N for Not-translate''')
+
+    prep_arg_parser.add_argument('-ner', '--ner-model', type=str,
+                                 help='''NER model for categorising the DNT tags.
+                                  NER is powered by Spacy, hence the value should be a valid spacy model. Example:
+                                  {en_core_web_sm, en_core_web_md, en_core_web_lg}. 
+                                  When not specified, no NER categorization will be done.''')
 
     # Train
     train_arg_parser.add_argument('model', type=str, help='''Path to store model file''')
@@ -259,6 +253,11 @@ def get_arg_parser():
             Data Format=SRC_SEQUENCE\\tTGT_SEQUENCE i.e. parallel bitext when --bitext is used''')
     train_arg_parser.add_argument('-c', '--context', type=int, default=2, help="Context in sequence.")
     train_arg_parser.add_argument('-bt', '--bitext', action='store_true', help="input is a parallel bitext")
+    train_arg_parser.add_argument('-ner', '--ner-model', type=str,
+                                  help='''Applicable for --bitext mode. NER model for categorising the tags.
+                                      NER is powered by Spacy, hence the value should be a valid spacy model. Example:
+                                      {en_core_web_sm, en_core_web_md, en_core_web_lg}. 
+                                      When not specified, no NER categorization will be done.''')
 
     train_arg_parser.add_argument('-nm', '--no-memorize', action='store_true', default=False,
                                   help="Do not memorize words")
