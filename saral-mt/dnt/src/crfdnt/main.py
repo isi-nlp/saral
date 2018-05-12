@@ -65,15 +65,12 @@ def prepare(inp, out, format, swap=False, ner_model=None):
 
 def train(inp, model, context, verbose, bitext=False, no_memorize=False, ner_model=None, **kwargs):
     featurizer = Featurizer(context, memorize=not no_memorize, ner_model=ner_model)
-
     train_data = featurizer.featurize_parallel_set(inp) if bitext else featurizer.featurize_dataset(inp)
-    train_data = list(train_data)   # TODO: not load all into memory
+    trainer = CRFTrainer(verbose=verbose)
+    trainer.train_model(train_data, model, **kwargs)
 
     with open(model + FEATS_SUFFIX, 'wb') as f:
         pickle.dump(featurizer, f)
-
-    trainer = CRFTrainer(verbose=verbose)
-    trainer.train_model(train_data, model, **kwargs)
 
 
 def evaluate_model(inp, model, explain=False):
