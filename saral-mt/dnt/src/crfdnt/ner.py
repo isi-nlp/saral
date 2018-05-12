@@ -7,39 +7,35 @@ import spacy
 from spacy.tokens import Doc
 import logging as log
 import unicodedata as ud
+from abc import ABC, abstractmethod
+import re
+import sys
 
 log.basicConfig(level=log.DEBUG)
 log.info(f'Spacy Version: {spacy.__version__}')
 
+# list because the order of application could be important
+PATTERNS = [
+    ('NUMBER', r'^[+-]?\d+(\.\d+)?$'),
+    ('HANDLE', r'^[a-zA-Z0-9\.\-\_]+@(([a-z0-9A-Z]+\.)+[a-z]{2,})$'),
+    ('HASH', r'^#.+'),
+    ('HANDLE', r'^@[^ @/]{3,}$'),
+    ('NUM_GROUP', r'^[0-9]+([\\\-/\.][0-9]+){2,}$'),
+    # No, TG didn't write this URL pattern, it is copied from  https://gist.github.com/gruber/249502
+    ('URL', r'^(?i)\b((?:[a-z][\w-]+:(?:/{1,3}|[a-z0-9%])|www\d{0,3}[.]|[a-z0-9.\-]+[.][a-z]{2,4}/)(?:[^\s()<>]+|\((' +
+        r'[^\s()<>]+|(\([^\s()<>]+\)))*\))+(?:\(([^\s()<>]+|(\([^\s()<>]+\)))*\)|[^\s`!()\[\]{};:\'".,<>?«»“”‘’]))$')
+]
 
-class NER(object):
 
-    def __init__(self, model='en_core_web_sm'):
-        log.info(f'Loading spacy model {model}')
-        try:
-            self.model = spacy.load(model, disable=['parser'])
-            log.debug(f'Loaded spacy model {model}')
-            # The default Tokenizer breaks punctuations. Expect pre tokenized input
-            self.model.tokenizer = WhitespaceTokenizer(self.model.vocab)
-        except OSError as e:
-            log.error(f'Failed to load model.  Please run `python -m spacy download {model}` to download the model')
-            raise e
+class BaseTagger(ABC):
 
+    @abstractmethod
     def tag(self, text, other_tag):
-        """
-        tokenizes and tags text
-        :param text: untokenized text string
-        :param other_tag:
-        :return: ([toks...], [tags...])
-        """
-        doc = self.model(text)
-        ent_types = [tok.ent_type_ if tok.ent_type_ else other_tag for tok in doc]
-        return list(map(str, doc)), ent_types
+        raise NotImplementedError()
 
     def tag_all(self, recs, other_tag='O'):
         """Tags a stream of lines with NER annotation
         :param recs: stream of lines
-        :param model: Spacy Model name
         :param other_tag: tag the non NE tokens as this tag
         :return: yields tuples ([toks...], [tags...])
         """
@@ -59,8 +55,8 @@ class NER(object):
         to_tags = self.project_tags(from_seq, from_tags, to_seq, other_tag, overwrite_tag)
         return from_seq, from_tags, to_seq, to_tags
 
-    @staticmethod
-    def project_tags(seq1, seq1_tags, seq2, other_tag='O', overwrite_tag='MISC'):
+    @classmethod
+    def project_tags(cls, seq1, seq1_tags, seq2, other_tag='O', overwrite_tag='MISC'):
         """
         Finds common tokens between seq1 and seq2, and projects tags of seq1 to seq2
         :param seq1: First sequence that has tags
@@ -83,6 +79,56 @@ class NER(object):
                     tag = overwrite_tag
             seq2_tags.append(tag)
         return seq2_tags
+
+
+class RegexTagger(BaseTagger):
+    """
+    regex based tagger, good for tagging emails, numbers etc
+    """
+
+    def __init__(self, patterns=PATTERNS):
+        """
+        :param patterns: List of tuples, having (name, pattern) strings
+        """
+        assert len(patterns) > 0
+        self.patterns = [(typ.upper(), re.compile(pat)) for typ, pat in patterns]
+
+    def tag(self, text, other_tag):
+        toks = text.split() if type(text) is str else text
+        tags = []
+        for tok in toks:
+            tag = other_tag
+            for typ, pat in self.patterns:
+                if pat.match(tok):
+                    tag = typ
+                    break
+            tags.append(tag)
+        return toks, tags
+
+
+class NER(BaseTagger):
+
+    def __init__(self, model='en_core_web_sm'):
+        log.info(f'Loading spacy model {model}')
+        try:
+            self.model = spacy.load(model, disable=['parser'])
+            log.debug(f'Loaded spacy model {model}')
+            # The default Tokenizer breaks punctuations. Expect pre tokenized input
+            self.model.tokenizer = WhitespaceTokenizer(self.model.vocab)
+        except OSError as e:
+            log.error(f'Failed to load model.  Please run `python -m spacy download {model}` to download the model')
+            raise e
+
+    def tag(self, text, other_tag):
+        """
+        tokenizes and tags text
+        :param text: untokenized text string
+        :param other_tag:
+        :return: ([toks...], [tags...])
+        """
+        doc = self.model(text)
+        ent_types = [tok.ent_type_ if tok.ent_type_ else other_tag for tok in doc]
+        return list(map(str, doc)), ent_types
 
 
 class WhitespaceTokenizer(object):

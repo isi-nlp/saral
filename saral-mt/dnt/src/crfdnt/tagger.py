@@ -142,11 +142,16 @@ class Featurizer(object):
     def get_gold_tagger(self):
         """Makes a gold tagger - for use when bitext is available"""
         if self.ner_model:
-            from .ner import NER
+            from .ner import NER, RegexTagger
             ner = NER(self.ner_model)
+            re_tagger = RegexTagger()
 
             def v2_tag_func(src, tgt):
                 _, _, src, src_tags = ner.tag_and_project(tgt, src)
+                _, re_src_tags = re_tagger.tag(src, None)
+                assert len(src_tags) == len(re_src_tags)
+                # Regex Tagger gets higher priority here
+                src_tags = [r_tag if r_tag else n_tag for r_tag, n_tag in zip(re_src_tags, src_tags)]
                 return src, src_tags
             return v2_tag_func
         else:
