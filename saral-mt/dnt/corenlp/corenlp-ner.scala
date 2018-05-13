@@ -38,11 +38,16 @@ try {
       val coreToks = sent.tokens()
       val toks = new Array[String](coreToks.size())
       val nerTags = new Array[String](coreToks.size())
+      val lemmas = new Array[String](coreToks.size())
+
       for ((ct, i) <- coreToks.view.zipWithIndex) {
         toks(i) = ct.originalText()
         nerTags(i) = ct.ner()
+        lemmas(i) = ct.lemma()
       }
-      out.println(toks.mkString(" ") + "\t" + nerTags.mkString(" "))
+      val poss = sent.posTags()
+      val outLine = Array(toks.mkString(" "), nerTags.mkString(" "), lemmas.mkString(" "), poss.mkString(" "))
+      out.println(outLine.mkString("\t"))
     }
   }
 } finally {
