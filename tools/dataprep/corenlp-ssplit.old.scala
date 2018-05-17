@@ -32,11 +32,11 @@ val multiFile = !args.toSet.contains("-tsv")  // TSV and multiFile are exclusive
     val fname = path.trim.split("/").last
     for (line <- lines) {
       if (!line.trim.isEmpty){
-        count += 1
         val doc = new Annotation(line)
         corenlp.annotate(doc)
         val sentences = doc.get(classOf[CoreAnnotations.SentencesAnnotation]).asScala
         for (sent: CoreMap <- sentences) {
+          count += 1
           print(s"$fname:$count\t")
           println(sent.toString.replace("\t", " "))
         }
