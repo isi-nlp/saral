@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-if [[ $# -le 2 ]]; then
+if [[ $# -lt 2 ]]; then
     echo "Invalid args. Usage: plain2tsv-batch.sh <DATA_DIR> <OUT_DIR>"
     exit 1
 fi
