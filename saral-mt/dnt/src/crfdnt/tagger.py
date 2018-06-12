@@ -141,17 +141,13 @@ class Featurizer(object):
 
     def get_gold_tagger(self):
         """Makes a gold tagger - for use when bitext is available"""
-        if self.ner_model:
+        if self.is_group_mode():
             from .ner import NER, RegexTagger
             ner = NER(self.ner_model)
             re_tagger = RegexTagger()
 
             def v2_tag_func(src, tgt):
-                _, _, src, src_tags = ner.tag_and_project(tgt, src)
-                _, re_src_tags = re_tagger.tag(src, None)
-                assert len(src_tags) == len(re_src_tags)
-                # Regex Tagger gets higher priority here
-                src_tags = [r_tag if r_tag else n_tag for r_tag, n_tag in zip(re_src_tags, src_tags)]
+                _, _, src, src_tags = ner.tag_and_project(tgt, src, fallback_tagger=re_tagger)
                 return src, src_tags
             return v2_tag_func
         else:
@@ -163,8 +159,9 @@ class Featurizer(object):
     def is_group_mode(self):
         return True if self.ner_model else False
 
-    def featurize_parallel_set(self, stream, swap=False, update_vocab_prob=0.7):
+    def featurize_parallel_set(self, stream, update_vocab_prob=0.7):
         tag_func = self.get_gold_tagger()
+        flag = True
         for line in stream:
             line = line.strip()
             if not line:
@@ -172,11 +169,16 @@ class Featurizer(object):
             if '\t' not in line:
                 print(f"Error! Cant split  :: {line}", file=sys.stderr)
                 continue
-            src, tgt = line.split('\t')
-            if swap:
-                src, tgt = tgt, src
-            src, tgt = src.split(), tgt.split()
-            src, src_tags = tag_func(tgt, src)
+            parts = line.split('\t')
+            parts = [s.split() for s in parts]
+            if len(parts) == 3:
+                if flag:
+                    log.info("Using third input column as Source tags")
+                    flag = False
+                src, tgt, src_tags = parts
+            else:
+                src, tgt = parts
+                src, src_tags = tag_func(src, tgt)
             assert len(src) == len(src_tags)
             if self.memorize and update_vocab_prob > 0 and random.uniform(0, 1) <= update_vocab_prob:
                 self.pos_vocab.update(tgt)

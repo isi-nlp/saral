@@ -33,6 +33,9 @@ class BaseTagger(ABC):
     def tag(self, text, other_tag):
         raise NotImplementedError()
 
+    def tag_tok(self, tok):
+        raise NotImplementedError()
+
     def tag_all(self, recs, other_tag='O'):
         """Tags a stream of lines with NER annotation
         :param recs: stream of lines
@@ -42,28 +45,30 @@ class BaseTagger(ABC):
         for line in recs:
             yield self.tag(line.strip(), other_tag)
 
-    def tag_and_project(self, from_seq, to_seq, other_tag='O', overwrite_tag='MISC'):
+    def tag_and_project(self, from_seq, to_seq, other_tag='O', fallback_tag='MISC', fallback_tagger=None):
         """
         Combines tag() and project_tags() together
         :param from_seq: text sequence known to the NER model (eg: eng sequence)
         :param to_seq: foreign text sequence
         :param other_tag: tag the non NER tokens with this
-        :param overwrite_tag: if a common token happen to have `other_tag`, then instead use this tag as final one
+        :param fallback_tagger: use this tagger as fall back
+        :param fallback_tag: if a common token happen to have `other_tag`, then instead use this tag as final one
         :return: (from_toks, from_tags, to_toks, to_tags)
         """
         from_toks, from_tags = self.tag(' '.join(from_seq), other_tag=other_tag)
-        to_tags = self.project_tags(from_seq, from_tags, to_seq, other_tag, overwrite_tag)
+        to_tags = self.project_tags(from_seq, from_tags, to_seq, other_tag, fallback_tag, fallback_tagger)
         return from_seq, from_tags, to_seq, to_tags
 
     @classmethod
-    def project_tags(cls, seq1, seq1_tags, seq2, other_tag='O', overwrite_tag='MISC'):
+    def project_tags(cls, seq1, seq1_tags, seq2, other_tag='O', fallback_tag='MISC', fallback_tagger=None):
         """
         Finds common tokens between seq1 and seq2, and projects tags of seq1 to seq2
         :param seq1: First sequence that has tags
         :param seq1_tags: tags of first sequence
         :param seq2: second sequence that needs to have tags projected to
         :param other_tag: Tag name for non-common tokens
-        :param overwrite_tag: if a common token happen to have `other_tag`, then instead use this tag as final one
+        :param fallback_tagger: use this tagger as fall back when the
+        :param fallback_tag: if a common token happen to have `other_tag`, then instead use this tag as final one
         :return: sequence of tags for sequence2
         """
         assert len(seq1) == len(seq1_tags), f'Cant match tags {seq1} {seq1_tags}'
@@ -76,7 +81,10 @@ class BaseTagger(ABC):
             if norm_tok in seq1_tag_lookup:  # DNT word
                 tag = seq1_tag_lookup[norm_tok]
                 if tag == other_tag and not is_punct(norm_tok):  # DNT word tagged as `other` by the previous tagger
-                    tag = overwrite_tag
+                    if fallback_tagger:
+                        tag = fallback_tagger.tag_tok(tok, fallback_tag)
+                    else:
+                        tag = fallback_tag
             seq2_tags.append(tag)
         return seq2_tags
 
@@ -95,15 +103,16 @@ class RegexTagger(BaseTagger):
 
     def tag(self, text, other_tag):
         toks = text.split() if type(text) is str else text
-        tags = []
-        for tok in toks:
-            tag = other_tag
-            for typ, pat in self.patterns:
-                if pat.match(tok):
-                    tag = typ
-                    break
-            tags.append(tag)
+        tags = [self.tag(tok, other_tag) for tok in toks]
         return toks, tags
+
+    def tag_tok(self, tok, other_tag=None):
+        tag = other_tag
+        for typ, pat in self.patterns:
+            if pat.match(tok):
+                tag = typ
+                break
+        return tag
 
 
 class NER(BaseTagger):

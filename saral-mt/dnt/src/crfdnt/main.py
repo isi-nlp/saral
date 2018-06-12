@@ -14,6 +14,7 @@ import pickle
 import json
 from .utils import tag_src_iob, dnt_tag_toks, evaluate_multi_class, cut_dnt_bio, cut_dnt_groups
 from .tagger import Featurizer, CRFTagger, CRFTrainer
+from .ner import BaseTagger
 
 log.basicConfig(level=log.INFO)
 
@@ -61,6 +62,24 @@ def prepare(inp, out, format, swap=False, ner_model=None):
 
     count = write_recs(iob_tag(), out)
     log.info(f"Wrote {count} records, format={format}")
+
+
+def project_tags(inp, out):
+    """Projects tags from one column to other for common tokens
+    INPUT: FROM_SEQ \\t FROM_SEQ_TAGS \\t TO_SEQ
+    OUTPUT: TO_SEQ \\t TO_SEQ_TAGS
+    """
+
+    def _project():
+        for line in inp:
+            parts = line.split('\t')
+            assert len(parts) == 3
+            from_seq, from_seq_tags, to_seq = (col.strip().split() for col in parts)
+            assert len(from_seq) == len(from_seq_tags)
+            to_seq_tags = BaseTagger.project_tags(from_seq, from_seq_tags, to_seq)
+            assert len(to_seq) == len(to_seq_tags)
+            yield ' '.join(to_seq), ' '.join(to_seq_tags)
+    write_recs(_project(), out)
 
 
 def train(inp, model, context, verbose, bitext=False, no_memorize=False, ner_model=None, **kwargs):
@@ -197,45 +216,37 @@ def dnt_paste(inp, out, ignore_errors=True):
     write_recs(_dnt_paste(), out)
 
 
+def add_task(parser, name, desc, inp_format=None, out_format=None, requires_model=False):
+    task_parser = parser.add_parser(name, help=desc, formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    if requires_model:
+        task_parser.add_argument('model', type=str, help='''Path to the model file''')
+    if inp_format:
+        task_parser.add_argument('-i', '--inp', default=sys.stdin, type=argparse.FileType('r'), help=f'''
+                Input stream. Default is STDIN. When specified, it should be a file path.
+                 Data Format= {inp_format}''')
+    if out_format:
+        task_parser.add_argument('-o', '--out', default=sys.stdout, type=argparse.FileType('w'), help=f'''
+                Output stream. Default is STDOUT. When specified, it should be a file path. 
+                Data Format= {out_format}''')
+
+    return task_parser
+
+
 def get_arg_parser():
-    # TODO: reorganize these parsers as parent-child, avoid redefinition of arguments
     parser = argparse.ArgumentParser(description='Do Not Translate (DNT) tagger', prog='crfdnt',
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     sub_parsers = parser.add_subparsers(help='tasks', dest='task')
     sub_parsers.required = True
-    prep_arg_parser = sub_parsers.add_parser('prepare', help='Prepare training data from parallel MT corpus',
-                                             formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    train_arg_parser = sub_parsers.add_parser('train', help='Train a CRF DNT Tagger model',
-                                              formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    tag_arg_parser = sub_parsers.add_parser('tag', help='Tag DNT words using CRF DNT model',
-                                            formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    eval_arg_parser = sub_parsers.add_parser('eval', help='Evaluate a CRF DNT model',
-                                             formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
-    eval_res_arg_parser = sub_parsers.add_parser('eval-res', help='Evaluate Result of tagger',
-                                                 formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-
-    cut_arg_parser = sub_parsers.add_parser('dnt-cut', help='Cut DNT words',
-                                            formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-
-    paste_arg_parser = sub_parsers.add_parser('dnt-paste', help='Paste DNT words',
-                                              formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-
-    # Preparation
-    prep_arg_parser.add_argument('-i', '--inp', default=sys.stdin, type=argparse.FileType('r'), help='''
-            Input stream. Default is STDIN. When specified, it should be a file path.
-             Data Format=SRC_SEQUENCE\\tTGT_SEQUENCE per line''')
-
-    prep_arg_parser.add_argument('-o', '--out', default=sys.stdout, type=argparse.FileType('w'), help='''
-            Output stream. Default is STDOUT. When specified, it should be a file path. 
-            Data Format depends on the (-f, --format) argument''')
+    # Prep
+    prep_arg_parser = add_task(sub_parsers, 'prepare', 'Prepare training data from parallel MT corpus',
+                               inp_format='SRC_SEQUENCE\\tTGT_SEQUENCE per line', out_format='Depends on -f argument')
     prep_arg_parser.add_argument('-s', '--swap', action='store_true', help='Swap the columns in input')
     prep_arg_parser.add_argument('-f', '--format', choices=['src-tags', 'tags', 'conll', 'TN'], default='src-tags',
                                  type=str, help='''Format of output: `src-tag`: output SOURCE\\tTAG per line.
                                    `tag`: output just TAG sequence per line.
                                    `conll`: output in CoNLL 2013 NER format. 
                                    `TN`: outputs binary flags: T for Translate, N for Not-translate''')
-
     prep_arg_parser.add_argument('-ner', '--ner-model', type=str,
                                  help='''NER model for categorising the DNT tags.
                                   NER is powered by Spacy, hence the value should be a valid spacy model. Example:
@@ -243,11 +254,9 @@ def get_arg_parser():
                                   When not specified, no NER categorization will be done.''')
 
     # Train
-    train_arg_parser.add_argument('model', type=str, help='''Path to store model file''')
-    train_arg_parser.add_argument('-i', '--inp', default=sys.stdin, type=argparse.FileType('r'), help='''
-            Input stream of Training data. Default is STDIN. When specified, it should be a file path.
-            Data Format=SRC_SEQUENCE\\tTAG_SEQUENCE per line by default
-            Data Format=SRC_SEQUENCE\\tTGT_SEQUENCE i.e. parallel bitext when --bitext is used''')
+    train_arg_parser = add_task(sub_parsers, 'train', 'Train a CRF DNT Tagger model', requires_model=True,
+                                inp_format='''SRC_SEQUENCE\\tTAG_SEQUENCE per line by default
+            or SRC_SEQUENCE\\tTGT_SEQUENCE[\\tSRC_TAGS] when --bitext is used''', out_format=None)
     train_arg_parser.add_argument('-c', '--context', type=int, default=2, help="Context in sequence.")
     train_arg_parser.add_argument('-bt', '--bitext', action='store_true', help="input is a parallel bitext")
     train_arg_parser.add_argument('-ner', '--ner-model', type=str,
@@ -260,45 +269,40 @@ def get_arg_parser():
                                   help="Do not memorize words")
     train_arg_parser.add_argument('-v', '--verbose', action='store_true', default=False, help="Verbose")
 
-    # Tagging
-    tag_arg_parser.add_argument('model', type=str, help='''Path to the stored model file''')
-    tag_arg_parser.add_argument('-i', '--inp', default=sys.stdin, type=argparse.FileType('r'), help='''
-            Input stream of data. Default is STDIN. When specified, it should be a file path.
-             Data Format=one SRC_SEQUENCE per line''')
-    tag_arg_parser.add_argument('-o', '--out', default=sys.stdout, type=argparse.FileType('w'), help='''
-        Output stream. Default is STDOUT. When specified, it should be a file path. 
-        Data Format=SRC_SEQUENCE\\tTAG_SEQUENCE per line.''')
+    train_arg_parser.add_argument('-mi', dest='max_iterations', type=int, help='Maximum Trainer Iterations',
+                                  default=100)
+    train_arg_parser.add_argument('-c1', dest='c1', type=float, help='L1 regularization Coefficient', default=1.0)
+    train_arg_parser.add_argument('-c2', dest='c2', type=float, help='L2 regularization Coefficient', default=1e-3)
+
+    # Tag
+    tag_arg_parser = add_task(sub_parsers, 'tag', 'Tag DNT words using CRF DNT model', requires_model=True,
+                              inp_format='one SRC_SEQUENCE per line',
+                              out_format='SRC_SEQUENCE\\tTAG_SEQUENCE per line')
     tag_arg_parser.add_argument('-f', '--format', choices=['tags', 'TN'], default='tags',
-                                 type=str, help='''Format of output: 
+                                type=str, help='''Format of output: 
                                        `tag`: output just TAG sequence per line. 
                                        `TN`: outputs binary flags: T for Translate, N for Not-translate''')
-
-    # Evaluation
-    eval_arg_parser.add_argument('model', type=str, help='''Path to the stored model file''')
-    eval_arg_parser.add_argument('-i', '--inp', default=sys.stdin, type=argparse.FileType('r'), help='''
-            Input stream of Test data. Default is STDIN. When specified, it should be a file path. 
-            Data Format=SRC_SEQUENCE\\tTAG_SEQUENCE per line''')
+    # Eval
+    eval_arg_parser = add_task(sub_parsers, 'eval', 'Evaluate a CRF DNT model', requires_model=True,
+                               inp_format='SRC_SEQUENCE\\tTAG_SEQUENCE per line')
     eval_arg_parser.add_argument('-e', '--explain', action='store_true',
                                  help='Explain top state transitions and weights')
 
-    eval_res_arg_parser.add_argument('-i', '--inp', default=sys.stdin, type=argparse.FileType('r'), help='''
-                Input stream of result and gold. Default is STDIN. When specified, it should be a file path. 
-                Data Format=PREDICTED_SEQUENCE\\tGOLD_SEQUENCE per line''')
+    # Eval Res
+    add_task(sub_parsers, 'eval-res', 'Evaluate Result of tagger',
+             inp_format='PREDICTED_SEQUENCE\\tGOLD_SEQUENCE per line')
 
-    # Cut task
-    cut_arg_parser.add_argument('model', type=str, help='''Path to the stored model file''')
-    cut_arg_parser.add_argument('-i', '--inp', default=sys.stdin, type=argparse.FileType('r'), help='''
-                Input stream of data. Default is STDIN. When specified, it should be a file path.
-                 Data Format=one SRC_SEQUENCE per line or SRC\\tTGT sequence per line.''')
-    cut_arg_parser.add_argument('-o', '--out', default=sys.stdout, type=argparse.FileType('w'), help='''
-            Output stream. Default is STDOUT. When specified, it should be a file path''')
+    # Cut
+    add_task(sub_parsers, 'dnt-cut', 'Cut DNT words', requires_model=True,
+             inp_format='one SRC_SEQUENCE per line or SRC\\tTGT sequence per line.',
+             out_format='SRC_SEQ_CUT\\tDNT or SRC_SEQ_CUT\\tTGT_SEQ_CUT\\tDNT')
 
-    # Paste task
-    paste_arg_parser.add_argument('-i', '--inp', default=sys.stdin, type=argparse.FileType('r'), help='''
-                Input stream of data. Default is STDIN. When specified, it should be a file path.
-                 Data Format=one TEXT\\tDNT_WORD sequence per line.''')
-    paste_arg_parser.add_argument('-o', '--out', default=sys.stdout, type=argparse.FileType('w'), help='''
-        Output stream. Default is STDOUT. When specified, it should be a file path''')
+    add_task(sub_parsers, 'project', 'Project tags', inp_format='FROM_SEQ \\t FROM_SEQ_TAGS \\t TO_SEQ per line.',
+             out_format='TO_SEQ \\t TO_SEQ_TAGS')
+
+    # Paste
+    add_task(sub_parsers, 'dnt-paste', 'Paste DNT words', inp_format='one TEXT_SEQ\\tDNT sequence per line',
+             out_format='replaced TEXT_SEQ per line')
     return parser
 
 
@@ -308,6 +312,7 @@ def main():
     tasks = {
         'train': train,
         'prepare': prepare,
+        'project': project_tags,
         'tag': tag,
         'eval': evaluate_model,
         'eval-res': evaluate_result,
