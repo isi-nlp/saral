@@ -14,6 +14,8 @@ max_len = args.max_len
 recs = (line.split('\t') for line in args.inp)
 recs = ((rec[0].strip(), rec[1].strip().split()) for rec in recs if len(rec) >= 2)
 for _id, toks in recs:
+    if not toks: # if there is an empty line with an ID, preserve it!!
+        toks = [' ']
     for i in range(0, len(toks), max_len):
         seq = ' '.join(toks[i: i+max_len])
         args.out.write(f'{_id}\t{seq}\n')
