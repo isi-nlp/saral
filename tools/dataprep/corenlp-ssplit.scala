@@ -24,6 +24,8 @@ val props = PropertiesUtils.asProperties(
   "ssplit.isOneSentence", "false")
 val corenlp = new StanfordCoreNLP(props)
 
+val minLen = 20
+
 val multiFile = !args.toSet.contains("-tsv")  // TSV and multiFile are exclusive, default is multiFile
 
   def splitFile(path:String){
@@ -49,12 +51,16 @@ val multiFile = !args.toSet.contains("-tsv")  // TSV and multiFile are exclusive
     val parts = line.split("\t")
     val id = parts(0)
     val text = parts(1)
-    val doc = new Annotation(text)
-    corenlp.annotate(doc)
-    val sentences = doc.get(classOf[CoreAnnotations.SentencesAnnotation]).asScala
-    for (sent: CoreMap <- sentences) {
-      print(id + "\t")
-      println(sent.toString.replace("\t", " "))
+    if (text.split(" +").length > minLen ) {
+        val doc = new Annotation(text)
+        corenlp.annotate(doc)
+        val sentences = doc.get(classOf[CoreAnnotations.SentencesAnnotation]).asScala
+        for (sent: CoreMap <- sentences) {
+            print(id + "\t")
+            println(sent.toString.replace("\t", " "))
+        }
+    } else {
+        println(id + '\t' + text.trim())
     }
   }
 
