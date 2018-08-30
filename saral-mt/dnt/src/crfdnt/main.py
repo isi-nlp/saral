@@ -175,6 +175,27 @@ def dnt_cut(inp, out, model):
     write_recs(_dnt_cut(), out)
 
 
+def dnt_cut_tagged(inp, out):
+    """
+    Cut DNT tokens from external tagger
+    :param inp: stream of either "SRC \t SRC_TAGS  or SRC \t SRC_TAGS \t TGT
+    :param outp: stream to write output
+    :return: None
+    """
+    lines = (line.strip() for line in inp)
+    lines = (l.split('\t') for l in lines if l)
+
+    def _cut(recs):
+        for rec in recs:
+            rec = [c.split() for c in rec]
+            assert len(rec) == 2 or len(rec) == 3
+            src, src_tags = rec[:2]
+            assert len(src) == len(src_tags), f'{src} and {src_tags} should have 1-to-1 map'
+            tgt = None if len(rec) < 3 else rec[2]
+            yield cut_dnt_bio(src, src_tags, tgt)
+    write_recs(_cut(lines), out)
+
+
 def dnt_paste(inp, out, ignore_errors=True):
     """
     restores DNT words back into the text
@@ -297,11 +318,20 @@ def get_arg_parser():
              inp_format='one SRC_SEQUENCE per line or SRC\\tTGT sequence per line.',
              out_format='SRC_SEQ_CUT\\tDNT or SRC_SEQ_CUT\\tTGT_SEQ_CUT\\tDNT')
 
-    add_task(sub_parsers, 'project', 'Project tags', inp_format='FROM_SEQ \\t FROM_SEQ_TAGS \\t TO_SEQ per line.',
+    # Cut
+    add_task(sub_parsers, 'dnt-cut-ex', 'Cut DNT words, using tagged source from external tagger',
+             requires_model=False,
+             inp_format='one SRC_SEQ\\tSRC_TAGS per line or '
+                        'SRC_SEQ\\tSRC_TAGS\\tTGT sequence per line.',
+             out_format='SRC_SEQ_CUT\\tDNT or SRC_SEQ_CUT\\tTGT_SEQ_CUT\\tDNT')
+
+    add_task(sub_parsers, 'project', 'Project tags',
+             inp_format='FROM_SEQ \\t FROM_SEQ_TAGS \\t TO_SEQ per line.',
              out_format='TO_SEQ \\t TO_SEQ_TAGS')
 
     # Paste
-    add_task(sub_parsers, 'dnt-paste', 'Paste DNT words', inp_format='one TEXT_SEQ\\tDNT sequence per line',
+    add_task(sub_parsers, 'dnt-paste', 'Paste DNT words',
+             inp_format='one TEXT_SEQ\\tDNT sequence per line',
              out_format='replaced TEXT_SEQ per line')
     return parser
 
@@ -317,6 +347,7 @@ def main():
         'eval': evaluate_model,
         'eval-res': evaluate_result,
         'dnt-cut': dnt_cut,
+        'dnt-cut-ex': dnt_cut_tagged,
         'dnt-paste': dnt_paste,
     }
     args = vars(args)
