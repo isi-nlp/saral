@@ -21,16 +21,24 @@ class Featurizer(object):
     Creates features for sequences
     """
 
-    def __init__(self, context, memorize=True):
+    def __init__(self, context, memorize=True, ner_model=None):
         """
         :param context: number of words in context (back side and front side) to use for features
         :param memorize: memorize words
         """
-        self._version = 3
+        """
+        Versions:
+        1 - base version without below
+        2 - Memorize and no-memorize  distinction
+        3 - More features for detecting URL, email, emoji etc
+        4 - Integrate NER tagger
+        """
+        self._version = 4
         self.context = context
         self.pos_vocab = set()
         self.neg_vocab = set()
         self.memorize = memorize
+        self.ner_model = ner_model
         log.info(f"Memorize words: {self.memorize}")
 
     def featurize_word(self, word):
@@ -131,7 +139,29 @@ class Featurizer(object):
             else:
                 yield seq
 
-    def featurize_parallel_set(self, stream, swap=False, update_vocab_prob=0.7):
+    def get_gold_tagger(self):
+        """Makes a gold tagger - for use when bitext is available"""
+        if self.is_group_mode():
+            from .ner import NER, RegexTagger
+            ner = NER(self.ner_model)
+            re_tagger = RegexTagger()
+
+            def v2_tag_func(src, tgt):
+                _, _, src, src_tags = ner.tag_and_project(tgt, src, fallback_tagger=re_tagger)
+                return src, src_tags
+            return v2_tag_func
+        else:
+            def v1_tag_func(src, tgt):
+                # return signature looks ugly, but made it to match v2_tagger
+                return src, tag_src_iob(src, tgt)
+            return v1_tag_func
+
+    def is_group_mode(self):
+        return True if self.ner_model else False
+
+    def featurize_parallel_set(self, stream, update_vocab_prob=0.7):
+        tag_func = self.get_gold_tagger()
+        flag = True
         for line in stream:
             line = line.strip()
             if not line:
@@ -139,22 +169,29 @@ class Featurizer(object):
             if '\t' not in line:
                 print(f"Error! Cant split  :: {line}", file=sys.stderr)
                 continue
-            src, tgt = line.split('\t')
-            if swap:
-                src, tgt = tgt, src
-            src, tgt = src.split(), tgt.split()
-            tags = tag_src_iob(src, tgt)
-            assert len(src) == len(tags)
+            parts = line.split('\t')
+            parts = [s.split() for s in parts]
+            if len(parts) == 3:
+                if flag:
+                    log.info("Using third input column as Source tags")
+                    flag = False
+                src, tgt, src_tags = parts
+            else:
+                src, tgt = parts
+                src, src_tags = tag_func(src, tgt)
+            assert len(src) == len(src_tags)
             if self.memorize and update_vocab_prob > 0 and random.uniform(0, 1) <= update_vocab_prob:
                 self.pos_vocab.update(tgt)
                 self.neg_vocab.update(src)
 
             x_seq = self.featurize_seq(src)
-            yield x_seq, tags
+            yield x_seq, src_tags
 
     def migrate(self):
         if self._version < 2:
             self.memorize = True
+        if self._version < 4 or not hasattr(self, 'ner_model'):
+            setattr(self, 'ner_model', None)
 
     @staticmethod
     def load(stream):
