@@ -4,3 +4,6 @@
 [submodule "saral-clir"]
 	path = saral-clir
 	url = git@github.com:isi-saral/saral-clir.git
+[submodule "saral-mt/ulf-tokenizer"]
+	path = saral-mt/ulf-tokenizer
+	url = git@github.com:isi-nlp/ulf-tokenizer.git
