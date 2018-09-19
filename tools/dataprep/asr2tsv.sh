@@ -5,4 +5,4 @@
 #  1. replaces first space with tab character (to make a TSV, first word is ID)
 #  2. replaces tokens such as <noise> <silence> etc with elipsis
 
-sed 's/^\([^[:space:]]\+\) /\1\t/' | sed 's/<[a-z]\+>/…/g'
+sed 's/^\([^[:space:]]\+\) /\1\t/' | sed 's/<[a-z-]\+>/…/g'
