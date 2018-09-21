@@ -7,7 +7,7 @@ import argparse
 p = argparse.ArgumentParser()
 p.add_argument('-i', '--inp', help='input TSV file', default=sys.stdin, type=argparse.FileType('r'))
 p.add_argument('-o', '--out', help='Output TSV file', default=sys.stdout, type=argparse.FileType('w'))
-p.add_argument('-l', '--max-len', help='Max Length', default=100, type=int)
+p.add_argument('-l', '--max-len', help='Max Length', default=80, type=int)
 args = p.parse_args()
 
 max_len = args.max_len
