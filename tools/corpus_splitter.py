@@ -31,6 +31,15 @@ def tokenize(text):
     return text.split()
 
 
+def parse_id(id):
+    """
+    splits id into doc_id and seg_id
+    """
+    parts = id.split('_')
+    doc_id = '_'.join(parts[:-1])
+    seg_id = parts[-1]
+    return doc_id, seg_id
+
 def assign_splits(path, dev_count, test_count, delim='\t'):
 
     index = defaultdict(int)
@@ -39,7 +48,7 @@ def assign_splits(path, dev_count, test_count, delim='\t'):
     with codecs.open(path, 'r', 'utf8') as f:
         for line in f:
             id, src, tgt = line.strip().split(delim)
-            doc_id, seg_id = id.split('_')
+            doc_id, seg_id = parse_id(id)
             # counts target side
             text = tgt
             index[doc_id] += len(tokenize(text))
@@ -118,7 +127,7 @@ def split_records(path, out_prefix, assignment, delim='\t'):
     with open(path) as inp:
         for line in inp:
             line = line.strip()
-            doc_id, _ = line.split(delim)[0].split('_')
+            doc_id, _ = parse_id(line.split(delim)[0])
             name = assignment[doc_id]
             files[name].write(line)
             files[name].write('\n')
