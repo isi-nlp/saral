@@ -49,6 +49,11 @@ val multiFile = !args.toSet.contains("-tsv")  // TSV and multiFile are exclusive
   def splitTSV(line:String){
     /*Uses same ID for all the splits */
     val parts = line.split("\t")
+    if (parts.length < 2) {
+       // error: skip
+       return;
+    }
+     
     val id = parts(0)
     val text = parts(1)
     if (text.split(" +").length > minLen ) {
