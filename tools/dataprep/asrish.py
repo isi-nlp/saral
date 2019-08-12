@@ -29,11 +29,15 @@ def asr_ish(sentence: str, lowercase: bool = True, remove_puncts: bool = True) -
     return sentence
 
 
-def main(inp: Iterator[str], out: TextIO):
+def main(inp: Iterator[str], out: TextIO, tsv_mode: bool= False):
     count = 0
     for line in inp:
+        prefix = ''
+        if tsv_mode: # ID<tab> is prefix
+            prefix, line = line.split('\t')
+            prefix += '\t'
         line = asr_ish(line)
-        out.write(line.strip() + '\n')
+        out.write(prefix + line.strip() + '\n')
         count += 1
     log.info(f"Wrote {count} lines to {out.name}")
 
@@ -44,6 +48,7 @@ if __name__ == '__main__':
                    help='Input file path')
     p.add_argument('-o', '--out', type=argparse.FileType('w'), default=sys.stdout,
                    help='Output file path')
+    p.add_argument('-tsv', '--tsv-mode', action='store_true', help='Input is a TSV: ID<tab>Text')
     args = vars(p.parse_args())
-    log.info(f'reading from {args["inp"].name}')
+    log.info(f'reading from {args["inp"].name}; tsv_mode ? {args.get("tsv_mode", False)}')
     main(**args)
