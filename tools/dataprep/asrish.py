@@ -45,4 +45,5 @@ if __name__ == '__main__':
     p.add_argument('-o', '--out', type=argparse.FileType('w'), default=sys.stdout,
                    help='Output file path')
     args = vars(p.parse_args())
+    log.info(f'reading from {args["inp"].name}')
     main(**args)

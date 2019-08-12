@@ -105,6 +105,7 @@ def main(lang: str, splits: List[str], asr_dir: Path, mt_dir: Path, dry_run: boo
 
     for split in splits:
         in_dir = asr_dir / split
+        log.info(f"Inside {in_dir}")
         assert in_dir.exists(), in_dir
 
         in_dir = in_dir / lang

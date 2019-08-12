@@ -22,7 +22,7 @@ def main():
     p.add_argument('-o', '--out', help='Output TSV file', default=sys.stdout, type=argparse.FileType('w'))
     p.add_argument('-l', '--max-len', help='Max Length', default=80, type=int)
     args = p.parse_args()
-    ssplit(**vars(args))
+    ssplit_tsv_len(**vars(args))
 
 if __name__ == '__main__':
     main()
