@@ -16,12 +16,15 @@ assert tsv_tok_script.exists()
 
 log.basicConfig(level=log.INFO)
 
-def asr_to_mt_path(file: Path, out_dir: Path, lang: str, split: str) -> Path:
+def asr_to_mt_path(file: Path, out_dir: Path, lang: str, split: str, unfused: bool=False) -> Path:
     name = file.name
     assert name.endswith(".txt")
     name = name.replace(".txt", ".src.tsv")
     name = name.replace(lang, lang + '-asr')
-    return out_dir / split / (lang + '-asr') / name
+    dir =  out_dir / split / (lang + '-asr') 
+    if unfused:
+        dir = dir / 'unfused'
+    return dir / name
 
 def line_mapper(mapper, inp: Path, out: Path, skip_empty=False) -> int:
     ct = 0
@@ -99,7 +102,8 @@ def create_ssplit(inp_tsv, out_tsv, max_len=80, dry_run=False):
         ssplit_tsv_len(inp, out, max_len)
 
 
-def main(lang: str, splits: List[str], asr_dir: Path, mt_dir: Path, dry_run: bool=False, **args):
+def main(lang: str, splits: List[str], asr_dir: Path, mt_dir: Path, dry_run: bool=False,
+         unfused:bool=False, **args):
     if isinstance(splits, str):
         splits = [splits]
 
@@ -109,12 +113,14 @@ def main(lang: str, splits: List[str], asr_dir: Path, mt_dir: Path, dry_run: boo
         assert in_dir.exists(), in_dir
 
         in_dir = in_dir / lang
+        if unfused:
+            in_dir = in_dir / 'unfused'
         assert in_dir.exists()
 
         asr_files = list(in_dir.glob("*.txt"))
         log.info(f"Found {len(asr_files)} in {in_dir}")
         assert asr_files
-        pairs = [(a, asr_to_mt_path(a, out_dir=mt_dir, lang=lang, split=split)) for a in asr_files]
+        pairs = [(a, asr_to_mt_path(a, out_dir=mt_dir, lang=lang, split=split, unfused=unfused)) for a in asr_files]
         # remove existing files
         pairs = [(asr, mt) for asr, mt in pairs if not mt.exists()]
         log.info(f"Found {len(pairs)} asr files with missing MT counterparts")
@@ -129,7 +135,6 @@ def main(lang: str, splits: List[str], asr_dir: Path, mt_dir: Path, dry_run: boo
             create_ids(ssplit_out,  dry_run=dry_run)
         log.info("All Done")
 
-
 def parse_args():
     parser = argparse.ArgumentParser(description='asrout to mt out')
     parser.add_argument('-l', '--lang', required=True, help="lang code such as 1A, 1B, 2B etc ")
@@ -138,6 +143,8 @@ def parse_args():
     parser.add_argument('-md', '--mt-dir', required=True, type=Path)
     parser.add_argument('-dr', '--dry-run', action='store_true',
                         help='Dont actually Run, just do a dry run.')
+    parser.add_argument('-un', '--unfused', action='store_true',
+                        help='process unfused subdir contents of asr-out/<split>/<lang>.')
     return vars(parser.parse_args())
 
 

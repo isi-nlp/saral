@@ -16,7 +16,8 @@ from typing import TextIO, Iterator
 import string
 log.basicConfig(level=log.INFO)
 
-keep_puncts = {'.'}
+#keep_puncts = {'.'}    # Keep dots
+keep_puncts = set()    # Keep no puncts 
 remove_puncts = ''.join(x for x in string.punctuation if x not in keep_puncts)
 punct_to_space = str.maketrans(remove_puncts, ' ' * len(remove_puncts))
 
