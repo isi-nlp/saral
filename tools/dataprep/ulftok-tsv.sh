@@ -20,5 +20,5 @@ fi
 [[ -f $OUTP ]] && { echo "output $OUTP exists; not overwriting it;" ; exit 4; }
 
 
-ULFTOK_PATH=$(realpath $DIR/../../saral-mt/ulf-tokenizer/ulf-src-tok.sh)
+ULFTOK_PATH=$(realpath $DIR/../../saral-mt/ulf-tokenizer/ulf-eng-tok.sh)
 paste <(cut -f1 $INP) <(cut -f2 $INP | $ULFTOK_PATH) > $OUTP
