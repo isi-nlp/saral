@@ -26,6 +26,7 @@ cut -f1,3 3C-analysis.src-ref.tsv >3C-analysis.ref.tsv
 cat 3C-analysis.src.tsv | ssplit-tsv-tok.sh >3C-analysis-ssplit.src.tok.tsv
 cut -f1 3C-analysis-ssplit.src.tok.tsv >3C-analysis-ssplit.ids
 ulftok-tsv.sh 3C-analysis.src.tsv 3C-analysis.src.tok.tsv
+ulftok-tsv.sh 3C-analysis.ref.tsv 3C-analysis.ref.tok.tsv
 cut -f1 3C-analysis.src.tok.tsv >3C-analysis.ids
 
 # dev
@@ -37,7 +38,7 @@ cut -f1 3C-dev-ssplit.src.tok.tsv >3C-dev-ssplit.ids
 ulftok-tsv.sh 3C-dev.src.tsv 3C-dev.src.tok.tsv
 cut -f1 3C-dev.src.tok.tsv >3C-dev.ids
 
- build
+# build
 # buildtrain has some very long lines; discard them now
 cp $SARAL_ROOT/data/gfi/mt-out/build1/3C/buildtrain.kk.en.raw.txt $SARAL_ROOT/data/gfi/mt-out/build1/3C/buildtrain.kk.en.raw.txt.orig
 cut -f1 $SARAL_ROOT/data/gfi/mt-out/build1/3C/buildtrain.kk.en.raw.txt >buildtrain.kk
