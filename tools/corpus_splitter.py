@@ -121,7 +121,7 @@ def split_records(path, out_prefix, assignment, delim='\t'):
     names = set(assignment.values())
     files = {}
     for name in names:
-        fp = "%s.%s.%s" % (out_prefix, name, path.split(".")[-1])
+        fp = "%s%s.%s" % (out_prefix, name, path.split(".")[-1])
         log.info("%s records are written to %s" % (name, fp))
         files[name] = codecs.open(fp, 'w', 'utf8')
     with open(path) as inp:
