@@ -11,8 +11,14 @@
 
 root=mt-out  # root dir of gfi/mt-out
 lang=3C
+#lang=3S
+lang=$1
+#sysname=$2
+mt_names=("${@:1}")  # slice array
 LC="-lc"
 echo "Reporting BLEU, MacroF1 with $LC detok on $lang"
+
+[[ -n $lang ]] || { echo "Error: <lang> argument is required"; echo "usage: <lang> [sys1 sys2 ...]"; exit 1; }
 
 
 delim=${delim:-','}
@@ -40,7 +46,10 @@ function detokenize_tsv {
 }
 
 
-mt_names=$(scan_mt_names)
+if [[ -z "${mt_names[@]}" ]]; then
+    mt_names=$(scan_mt_names)
+fi
+
 test_names="analysis buildtest builddev"
 test_names_str=$(echo $test_names | sed "s/ /$delim$delim/g")
 
