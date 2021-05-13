@@ -14,7 +14,7 @@ lang=3C
 #lang=3S
 lang=$1
 #sysname=$2
-mt_names=("${@:1}")  # slice array
+mt_names=("${@:2}")  # slice array
 LC="-lc"
 echo "Reporting BLEU, MacroF1 with $LC detok on $lang"
 
@@ -47,14 +47,14 @@ function detokenize_tsv {
 
 
 if [[ -z "${mt_names[@]}" ]]; then
-    mt_names=$(scan_mt_names)
+    mapfile -t mt_names < <(scan_mt_names)
 fi
 
 test_names="analysis buildtest builddev"
 test_names_str=$(echo $test_names | sed "s/ /$delim$delim/g")
 
 printf "System/BLEU MacroF1${delim}${test_names_str}\n"
-for mt in $mt_names; do
+for mt in "${mt_names[@]}"; do
     printf "$mt$delim"
 
     ( for t in $test_names; do
