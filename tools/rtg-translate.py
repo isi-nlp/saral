@@ -69,6 +69,7 @@ def main(**args):
     args = args or vars(parse_args())
     client = RTGClient(api_url=args['api'])
     sents = args['inp']
+    sents = [s.strip() for s in sents]  #buffering is optional; it helps in estimating time
 
     result = client.translate_all(sents=sents, batch_size=args['batch_size'],
                                   tsv_mode=args.get('tsv'))
