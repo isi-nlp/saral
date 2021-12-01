@@ -4,15 +4,16 @@ This repo has some of the tools used by SARAL teams for IARPA MATERIAL
 
 ## Data preparation tools
 
-[tools](tools) directory, and especially [tools/dataprep](tools/dataprep)
+* Documentation : https://github.com/isi-nlp/saral/wiki 
+* [tools](tools) directory, and especially [tools/dataprep](tools/dataprep) has bunch of scripts
 
-## Other
+
+## Other repositories
 
 * RTG -- https://github.com/isi-nlp/rtg
 * Mtdata -- https://github.com/thammegowda/mtdata/
 * NLCodec -- https://github.com/isi-nlp/nlcodec
 * VistaMT --  https://github.com/isi-vista/VistaMT
-*
 
 
 ## ACKNOWLEDGEMENTS
