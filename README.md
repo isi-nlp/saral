@@ -1,21 +1,18 @@
 # SARAL
 
-This is a parent repository of SARAL Project.
-This repository offers links to sub project repositories.
+This repo has some of the tools used by SARAL teams for IARPA MATERIAL 
 
+## Data preparation tools
 
-## [saral-mt](saral-mt)
+[tools](tools) directory, and especially [tools/dataprep](tools/dataprep)
 
-Machine Translation Stuff
+## Other
 
-## saral-clir
-
-Cross Language Information Retrieval Stuff
-
-
-## tools
-
-Any scripts and tools shared across the teams
+* RTG -- https://github.com/isi-nlp/rtg
+* Mtdata -- https://github.com/thammegowda/mtdata/
+* NLCodec -- https://github.com/isi-nlp/nlcodec
+* VistaMT --  https://github.com/isi-vista/VistaMT
+*
 
 
 ## ACKNOWLEDGEMENTS
